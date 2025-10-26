@@ -273,6 +273,21 @@
                 return; // Don't show preview for current page
             }
             
+            // Skip mailto: links (email addresses)
+            if (url.startsWith('mailto:')) {
+                return;
+            }
+            
+            // Skip javascript: and data: links
+            if (url.startsWith('javascript:') || url.startsWith('data:')) {
+                return;
+            }
+            
+            // Skip anchors to same page
+            if (url.startsWith('#') || (url.startsWith('/') && !url.includes('http'))) {
+                return;
+            }
+            
             // Cancel any pending hide operations
             if (activeTooltip.hideTimeout) {
                 clearTimeout(activeTooltip.hideTimeout);
@@ -361,8 +376,39 @@
             }, HIDE_DELAY);
         }
         
-        // Attach event listeners to all links
+        // Use event delegation for better Gmail compatibility
         function attachToLinks() {
+            // Remove old direct listeners if any
+            document.removeEventListener('mouseenter', delegateHandleEnter, true);
+            document.removeEventListener('mouseleave', delegateHandleLeave, true);
+            
+            // Add event delegation listeners
+            document.addEventListener('mouseenter', delegateHandleEnter, true);
+            document.addEventListener('mouseleave', delegateHandleLeave, true);
+        }
+        
+        // Delegated mouseenter handler
+        function delegateHandleEnter(event) {
+            const target = event.target.closest('a[href]');
+            if (target && target.href) {
+                handleLinkHover({ 
+                    currentTarget: target, 
+                    clientX: event.clientX, 
+                    clientY: event.clientY 
+                });
+            }
+        }
+        
+        // Delegated mouseleave handler
+        function delegateHandleLeave(event) {
+            const target = event.target.closest('a[href]');
+            if (target && target.href) {
+                handleLinkLeave.call(target);
+            }
+        }
+        
+        // Also attach directly for performance on existing links
+        function attachDirectListeners() {
             const links = document.querySelectorAll('a[href]');
             
             links.forEach(link => {
@@ -372,20 +418,51 @@
                 }
                 
                 link.dataset.tooltipAttached = 'true';
-                link.addEventListener('mouseenter', handleLinkHover);
-                link.addEventListener('mouseleave', handleLinkLeave);
+                link.addEventListener('mouseenter', handleLinkHover, { capture: true });
+                link.addEventListener('mouseleave', handleLinkLeave, { capture: true });
             });
         }
         
         // Observe DOM changes for dynamically added links
         function observeDOM() {
             const observer = new MutationObserver(() => {
-                attachToLinks();
+                // Re-attach direct listeners for new links
+                attachDirectListeners();
             });
             
             observer.observe(document.body, {
                 childList: true,
                 subtree: true
+            });
+            
+            // Also handle iframes (common in Gmail)
+            document.querySelectorAll('iframe').forEach(iframe => {
+                try {
+                    iframe.addEventListener('load', () => {
+                        try {
+                            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                            if (iframeDoc) {
+                                const iframeLinks = iframeDoc.querySelectorAll('a[href]');
+                                iframeLinks.forEach(link => {
+                                    if (!link.dataset.tooltipAttached) {
+                                        link.dataset.tooltipAttached = 'true';
+                                        link.addEventListener('mouseenter', (e) => {
+                                            handleLinkHover({
+                                                currentTarget: link,
+                                                clientX: e.clientX + iframe.offsetLeft,
+                                                clientY: e.clientY + iframe.offsetTop
+                                            });
+                                        }, { capture: true });
+                                    }
+                                });
+                            }
+                        } catch (e) {
+                            // Cross-origin iframe, skip
+                        }
+                    });
+                } catch (e) {
+                    // Can't access iframe
+                }
             });
         }
         
@@ -417,7 +494,14 @@
         
         // Initialize
         attachToLinks();
+        attachDirectListeners();
         observeDOM();
+        
+        // Also observe iframes
+        const iframeObserver = new MutationObserver(() => {
+            observeDOM();
+        });
+        iframeObserver.observe(document.body, { childList: true, subtree: true });
         
         console.log('✅ Tooltip system initialized. Use window.spiderPrecrawl() to pre-cache links.');
     }
