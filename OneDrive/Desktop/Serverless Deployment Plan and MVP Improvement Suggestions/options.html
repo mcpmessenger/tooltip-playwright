@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tooltip System Settings</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input[type="url"] { width: 400px; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 15px; margin-top: 20px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #status { margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Playwright Tooltip System Settings</h1>
+    <p>Configure the URL for your Playwright Screenshot Backend Service.</p>
+
+    <label for="backendUrl">Backend Service URL (e.g., http://localhost:3000 or your AWS API Gateway URL):</label>
+    <input type="url" id="backendUrl" required>
+
+    <button id="saveButton">Save Settings</button>
+    <div id="status"></div>
+
+    <script src="options.js"></script>
+</body>
+</html>
