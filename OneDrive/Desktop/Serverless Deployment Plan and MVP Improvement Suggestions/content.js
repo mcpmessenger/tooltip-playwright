@@ -389,10 +389,16 @@
         
         // Delegated mouseenter handler
         function delegateHandleEnter(event) {
-            const target = event.target.closest('a[href]');
-            if (target && target.href) {
+            // Safely get the target element
+            const target = event.target;
+            if (!target || typeof target.closest !== 'function') {
+                return;
+            }
+            
+            const link = target.closest('a[href]');
+            if (link && link.href) {
                 handleLinkHover({ 
-                    currentTarget: target, 
+                    currentTarget: link, 
                     clientX: event.clientX, 
                     clientY: event.clientY 
                 });
@@ -401,9 +407,15 @@
         
         // Delegated mouseleave handler
         function delegateHandleLeave(event) {
-            const target = event.target.closest('a[href]');
-            if (target && target.href) {
-                handleLinkLeave.call(target);
+            // Safely get the target element
+            const target = event.target;
+            if (!target || typeof target.closest !== 'function') {
+                return;
+            }
+            
+            const link = target.closest('a[href]');
+            if (link && link.href) {
+                handleLinkLeave.call(link);
             }
         }
         
