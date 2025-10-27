@@ -679,23 +679,32 @@ app.post('/parse-key', async (req, res) => {
 });
 
 // Get OCR text for a screenshot
-app.get('/ocr/:url*', (req, res) => {
-    const url = req.params.url + (req.params[0] || '');
+app.get('/ocr', (req, res) => {
+    const url = req.query.url;
+    
+    if (!url) {
+        return res.status(400).json({
+            error: 'Missing url parameter',
+            message: 'Please provide ?url=https://example.com'
+        });
+    }
     
     // Check cache
     const cacheEntry = screenshotCache.get(url);
-    if (cacheEntry && cacheEntry.ocrText) {
+    if (cacheEntry && cacheEntry.ocrText && cacheEntry.ocrText.trim()) {
         return res.json({
             url: url,
             ocrText: cacheEntry.ocrText,
-            ocrTimestamp: cacheEntry.ocrTimestamp
+            ocrTimestamp: cacheEntry.ocrTimestamp,
+            status: 'success'
         });
     }
     
     res.json({
         url: url,
         ocrText: '',
-        message: 'OCR text not available yet (still processing)'
+        message: 'OCR text not available yet (still processing)',
+        status: 'processing'
     });
 });
 
