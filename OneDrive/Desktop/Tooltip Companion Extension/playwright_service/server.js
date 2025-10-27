@@ -185,6 +185,61 @@ function isCacheValid(timestamp) {
     return (Date.now() - timestamp) < CACHE_TTL;
 }
 
+// Extract OCR text from screenshot (background processing)
+function extractOCRTextAsync(screenshotDataUrl, url) {
+    // Run asynchronously - don't block
+    setImmediate(async () => {
+        try {
+            const { spawnSync } = require('child_process');
+            const path = require('path');
+            const fs = require('fs');
+            
+            console.log(`🔍 Starting background OCR for ${url}...`);
+            
+            // Save to temp file
+            const tempPath = path.join(__dirname, 'temp_ocr_' + Date.now() + '.png');
+            const base64Data = screenshotDataUrl.split(',')[1];
+            fs.writeFileSync(tempPath, Buffer.from(base64Data, 'base64'));
+            
+            // Run OCR
+            const ocrPath = path.join(__dirname, '..', 'Smart Parser and OCR Integration for API Keys and Annotations', 'ocr_processor.py');
+            
+            const env = { ...process.env };
+            if (!env.PATH.includes('Tesseract-OCR')) {
+                env.PATH = 'C:\\Program Files\\Tesseract-OCR;' + env.PATH;
+            }
+            
+            const result = spawnSync('python', [ocrPath, tempPath], {
+                encoding: 'utf8',
+                env: env
+            });
+            
+            // Clean up
+            fs.unlinkSync(tempPath);
+            
+            if (result.status === 0 && result.stdout) {
+                try {
+                    const ocrData = JSON.parse(result.stdout);
+                    const ocrText = ocrData.full_text_context || '';
+                    
+                    // Update cache with OCR text
+                    const cacheEntry = screenshotCache.get(url);
+                    if (cacheEntry) {
+                        cacheEntry.ocrText = ocrText;
+                        cacheEntry.ocrTimestamp = Date.now();
+                        console.log(`✅ OCR text extracted and cached for ${url} (${ocrText.length} chars)`);
+                    }
+                } catch (parseError) {
+                    console.error('OCR parse error:', parseError.message);
+                }
+            }
+            
+        } catch (error) {
+            console.error('OCR extraction error:', error.message);
+        }
+    });
+}
+
 // Capture screenshot
 async function captureScreenshot(url) {
     let browserInstance = null;
@@ -242,10 +297,16 @@ async function captureScreenshot(url) {
         // Cache the result
         screenshotCache.set(url, {
             screenshot: dataUrl,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            ocrText: '', // Will be populated by background OCR
+            ocrTimestamp: null
         });
         
         console.log(`✅ Screenshot captured: ${url}`);
+        
+        // Extract OCR text in background (non-blocking)
+        extractOCRTextAsync(dataUrl, url);
+        
         return dataUrl;
         
     } catch (error) {
@@ -364,62 +425,70 @@ app.post('/chat', async (req, res) => {
                 context += `- Suggestions: ${cacheEntry.analysis.suggestions.join(', ')}\n`;
             }
             
-            // Try to extract OCR text from cached screenshot (synchronous)
+            // Use cached OCR text if available, otherwise extract on demand
             if (cacheEntry && cacheEntry.screenshot) {
                 try {
-                    console.log('🔍 Starting OCR processing for screenshot...');
-                    const { spawnSync } = require('child_process');
-                    const path = require('path');
-                    const fs = require('fs');
-                    
-                    // Save screenshot to temp file for OCR
-                    const tempImagePath = path.join(__dirname, 'temp_screenshot.png');
-                    const base64Data = cacheEntry.screenshot.split(',')[1];
-                    fs.writeFileSync(tempImagePath, Buffer.from(base64Data, 'base64'));
-                    console.log('💾 Screenshot saved to temp file for OCR');
-                    
-                    // Call OCR processor synchronously
-                    const ocrPath = path.join(__dirname, '..', 'Smart Parser and OCR Integration for API Keys and Annotations', 'ocr_processor.py');
-                    
-                    if (fs.existsSync(ocrPath)) {
-                        console.log('🎯 Running OCR script...');
-                        // Set PATH to include Tesseract if not already there
-                        const env = process.env;
-                        if (!env.PATH.includes('Tesseract-OCR')) {
-                            env.PATH = 'C:\\Program Files\\Tesseract-OCR;' + env.PATH;
-                        }
+                    // First check if OCR text is already cached
+                    if (cacheEntry.ocrText && cacheEntry.ocrText.trim()) {
+                        console.log('✅ Using cached OCR text');
+                        const textPreview = cacheEntry.ocrText.substring(0, 200);
+                        context += `\n📝 Page Text Content (OCR - Cached):\n${cacheEntry.ocrText.substring(0, 500)}\n`;
+                        console.log('✅ OCR context added from cache. Extracted text preview:', textPreview);
+                    } else {
+                        console.log('🔍 Starting OCR processing for screenshot (not cached)...');
+                        const { spawnSync } = require('child_process');
+                        const path = require('path');
+                        const fs = require('fs');
                         
-                        const ocrResult = spawnSync('python', [ocrPath, tempImagePath], {
-                            cwd: path.dirname(ocrPath),
-                            encoding: 'utf8',
-                            env: env
-                        });
+                        // Save screenshot to temp file for OCR
+                        const tempImagePath = path.join(__dirname, 'temp_screenshot.png');
+                        const base64Data = cacheEntry.screenshot.split(',')[1];
+                        fs.writeFileSync(tempImagePath, Buffer.from(base64Data, 'base64'));
+                        console.log('💾 Screenshot saved to temp file for OCR');
                         
-                        // Clean up temp file
-                        fs.unlinkSync(tempImagePath);
+                        // Call OCR processor synchronously
+                        const ocrPath = path.join(__dirname, '..', 'Smart Parser and OCR Integration for API Keys and Annotations', 'ocr_processor.py');
                         
-                        if (ocrResult.status === 0 && ocrResult.stdout) {
-                            try {
-                                const ocrData = JSON.parse(ocrResult.stdout);
-                                if (ocrData.full_text_context && !ocrData.error) {
-                                    const textPreview = ocrData.full_text_context.substring(0, 200);
-                                    context += `\n📝 Page Text Content (OCR):\n${ocrData.full_text_context.substring(0, 500)}\n`;
-                                    console.log('✅ OCR context added. Extracted text preview:', textPreview);
-                                } else if (ocrData.error) {
-                                    console.warn('⚠️ OCR returned error:', ocrData.error);
+                        if (fs.existsSync(ocrPath)) {
+                            console.log('🎯 Running OCR script...');
+                            // Set PATH to include Tesseract if not already there
+                            const env = process.env;
+                            if (!env.PATH.includes('Tesseract-OCR')) {
+                                env.PATH = 'C:\\Program Files\\Tesseract-OCR;' + env.PATH;
+                            }
+                            
+                            const ocrResult = spawnSync('python', [ocrPath, tempImagePath], {
+                                cwd: path.dirname(ocrPath),
+                                encoding: 'utf8',
+                                env: env
+                            });
+                            
+                            // Clean up temp file
+                            fs.unlinkSync(tempImagePath);
+                            
+                            if (ocrResult.status === 0 && ocrResult.stdout) {
+                                try {
+                                    const ocrData = JSON.parse(ocrResult.stdout);
+                                    if (ocrData.full_text_context && !ocrData.error) {
+                                        const textPreview = ocrData.full_text_context.substring(0, 200);
+                                        context += `\n📝 Page Text Content (OCR):\n${ocrData.full_text_context.substring(0, 500)}\n`;
+                                        console.log('✅ OCR context added. Extracted text preview:', textPreview);
+                                    } else if (ocrData.error) {
+                                        console.warn('⚠️ OCR returned error:', ocrData.error);
+                                    }
+                                } catch (parseError) {
+                                    console.error('❌ OCR parse error:', parseError.message);
                                 }
-                            } catch (parseError) {
-                                console.error('❌ OCR parse error:', parseError.message);
+                            } else {
+                                console.error('❌ OCR failed. Status:', ocrResult.status);
+                                if (ocrResult.stderr) {
+                                    console.error('❌ OCR error output:', ocrResult.stderr);
+                                }
                             }
                         } else {
-                            console.error('❌ OCR failed. Status:', ocrResult.status);
-                            if (ocrResult.stderr) {
-                                console.error('❌ OCR error output:', ocrResult.stderr);
-                            }
+                            console.warn('⚠️ OCR script not found at:', ocrPath);
+                            fs.unlinkSync(tempImagePath);
                         }
-                    } else {
-                        console.warn('⚠️ OCR script not found at:', ocrPath);
-                        fs.unlinkSync(tempImagePath);
                     }
                 } catch (ocrError) {
                     console.error('❌ OCR processing error:', ocrError.message);
@@ -607,6 +676,27 @@ app.post('/parse-key', async (req, res) => {
         console.error('❌ Parse key error:', error.message);
         res.status(500).json({ error: 'Failed to process parse request', details: error.message });
     }
+});
+
+// Get OCR text for a screenshot
+app.get('/ocr/:url*', (req, res) => {
+    const url = req.params.url + (req.params[0] || '');
+    
+    // Check cache
+    const cacheEntry = screenshotCache.get(url);
+    if (cacheEntry && cacheEntry.ocrText) {
+        return res.json({
+            url: url,
+            ocrText: cacheEntry.ocrText,
+            ocrTimestamp: cacheEntry.ocrTimestamp
+        });
+    }
+    
+    res.json({
+        url: url,
+        ocrText: '',
+        message: 'OCR text not available yet (still processing)'
+    });
 });
 
 // Health check
