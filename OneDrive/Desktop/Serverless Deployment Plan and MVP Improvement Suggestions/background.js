@@ -1,27 +1,41 @@
 // background.js - Service Worker for Playwright Tooltip System
 
+// Function to create/update context menu items
+function createContextMenu() {
+    // Remove existing items to avoid duplicates
+    chrome.contextMenus.removeAll(() => {
+        // Create context menu items
+        chrome.contextMenus.create({
+            id: 'toggle-tooltips',
+            title: 'Enable/Disable Playwright Tooltips',
+            contexts: ['all']
+        });
+        
+        chrome.contextMenus.create({
+            id: 'precrawl-links',
+            title: 'Precrawl Links (Cache Screenshots)',
+            contexts: ['all']
+        });
+        
+        chrome.contextMenus.create({
+            id: 'refresh-cache',
+            title: 'Refresh Cache (Clear & Reload)',
+            contexts: ['all']
+        });
+        
+        console.log('✅ Context menu created');
+    });
+}
+
+// Create context menu on install
 chrome.runtime.onInstalled.addListener(() => {
     console.log('Playwright Tooltip System installed');
-    
-    // Create context menu items
-    chrome.contextMenus.create({
-        id: 'toggle-tooltips',
-        title: 'Enable/Disable Playwright Tooltips',
-        contexts: ['all']
-    });
-    
-    chrome.contextMenus.create({
-        id: 'precrawl-links',
-        title: 'Precrawl Links (Cache Screenshots)',
-        contexts: ['all']
-    });
-    
-    chrome.contextMenus.create({
-        id: 'refresh-cache',
-        title: 'Refresh Cache (Clear & Reload)',
-        contexts: ['all']
-    });
+    createContextMenu();
 });
+
+// Create context menu when service worker starts (runs on every reload)
+console.log('🚀 Playwright Tooltip System service worker starting...');
+createContextMenu();
 
 // Handle context menu click
 chrome.contextMenus.onClicked.addListener((info, tab) => {
