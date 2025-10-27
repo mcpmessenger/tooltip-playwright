@@ -54,6 +54,27 @@
         };
         let tooltipDiv = null;
         
+        // IndexedDB for persistent storage
+        let db = null;
+        const DB_NAME = 'playwright-tooltips';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'screenshots';
+        
+        // Initialize IndexedDB
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onerror = () => console.warn('IndexedDB failed to open');
+        request.onsuccess = () => {
+            db = request.result;
+            console.log('✅ IndexedDB initialized for persistent caching');
+        };
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                const store = db.createObjectStore(STORE_NAME, { keyPath: 'url' });
+                store.createIndex('timestamp', 'timestamp', { unique: false });
+            }
+        };
+        
         // Create tooltip element
         function createTooltipElement() {
             if (tooltipDiv) return tooltipDiv;
@@ -239,6 +260,9 @@
                     timestamp: Date.now()
                 });
                 
+                // Also save to IndexedDB for persistence
+                await saveToIndexedDB(url, blobUrl);
+                
                 console.log(`✅ Screenshot cached successfully`);
                 return blobUrl;
         } catch (error) {
@@ -247,16 +271,75 @@
             }
         }
         
-        // Get screenshot (from cache or fetch)
-        async function getScreenshot(url) {
-            const cacheEntry = cache.get(url);
+        // Load screenshot from IndexedDB
+        async function loadFromIndexedDB(url) {
+            if (!db) return null;
             
+            try {
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.get(url);
+                
+                return new Promise((resolve, reject) => {
+                    request.onsuccess = () => {
+                        if (request.result && isCacheValid(request.result)) {
+                            console.log(`📦 IndexedDB hit: ${url}`);
+                            // Also update memory cache
+                            cache.set(url, request.result);
+                            resolve(request.result.screenshotUrl);
+                        } else {
+                            resolve(null);
+                        }
+                    };
+                    request.onerror = () => reject(request.error);
+                });
+            } catch (error) {
+                console.warn('IndexedDB read error:', error);
+                return null;
+            }
+        }
+        
+        // Save screenshot to IndexedDB
+        async function saveToIndexedDB(url, screenshotUrl) {
+            if (!db) return;
+            
+            try {
+                const data = {
+                    url: url,
+                    screenshotUrl: screenshotUrl,
+                    timestamp: Date.now()
+                };
+                
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                await store.put(data);
+                console.log(`💾 Saved to IndexedDB: ${url}`);
+            } catch (error) {
+                console.warn('IndexedDB write error:', error);
+            }
+        }
+        
+        // Get screenshot (from IndexedDB, cache, or fetch)
+        async function getScreenshot(url) {
+            // Check memory cache first
+            const cacheEntry = cache.get(url);
             if (isCacheValid(cacheEntry)) {
                 return cacheEntry.screenshotUrl;
             }
             
-            // Fetch and cache
-            return await fetchScreenshot(url);
+            // Try IndexedDB
+            const indexedDBScreenshot = await loadFromIndexedDB(url);
+            if (indexedDBScreenshot) {
+                return indexedDBScreenshot;
+            }
+            
+            // Fetch from backend
+            const screenshotUrl = await fetchScreenshot(url);
+            
+            // Save to IndexedDB for persistence
+            await saveToIndexedDB(url, screenshotUrl);
+            
+            return screenshotUrl;
         }
         
         // Handle link hover
@@ -333,9 +416,18 @@
                     // Show loading
                     showTooltip(event.clientX, event.clientY, null);
                     
+                    // Set a timeout to hide loading if it takes too long
+                    const loadingTimeout = setTimeout(() => {
+                        if (tooltipDiv && activeTooltip.isVisible) {
+                            console.warn('Screenshot load timeout, hiding tooltip');
+                            hideTooltip();
+                        }
+                    }, 10000); // 10 second timeout
+                    
                     // Fetch screenshot
                     getScreenshot(url)
                         .then(screenshotUrl => {
+                            clearTimeout(loadingTimeout);
                             // Check if still valid before showing
                             if (activeTooltip.element === element && activeTooltip.currentUrl === url) {
                                 // Replace loading with screenshot
@@ -348,9 +440,12 @@
                             }
                         })
                         .catch(error => {
+                            clearTimeout(loadingTimeout);
                             console.warn('Failed to load screenshot:', error);
                             if (activeTooltip.element === element && activeTooltip.currentUrl === url && tooltipDiv) {
                                 tooltipDiv.innerHTML = `<div style="padding: 15px; text-align: center; color: #d32f2f; font-size: 12px;">⚠️ Failed to load</div>`;
+                                // Auto-hide error after 2 seconds
+                                setTimeout(() => hideTooltip(), 2000);
                             }
                         });
                 }
