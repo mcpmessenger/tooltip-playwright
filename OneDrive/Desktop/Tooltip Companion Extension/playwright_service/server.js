@@ -7,6 +7,47 @@ const { chromium } = require('playwright');
 const cors = require('cors');
 const OpenAI = require('openai');
 
+// Simple in-memory queue for request management
+class RequestQueue {
+    constructor() {
+        this.queue = [];
+        this.processing = new Set();
+        this.maxConcurrent = 3;
+    }
+    
+    async add(fn, priority = 0) {
+        return new Promise((resolve, reject) => {
+            this.queue.push({ fn, priority, resolve, reject });
+            this.queue.sort((a, b) => b.priority - a.priority);
+            this.process();
+        });
+    }
+    
+    async process() {
+        while (this.queue.length > 0 && this.processing.size < this.maxConcurrent) {
+            const item = this.queue.shift();
+            this.processing.add(item);
+            
+            try {
+                const result = await item.fn();
+                item.resolve(result);
+            } catch (error) {
+                item.reject(error);
+            } finally {
+                this.processing.delete(item);
+            }
+        }
+    }
+    
+    getStats() {
+        return {
+            queueLength: this.queue.length,
+            processing: this.processing.size,
+            maxConcurrent: this.maxConcurrent
+        };
+    }
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -128,6 +169,7 @@ class BrowserPool {
 
 // State
 const browserPool = new BrowserPool(3); // 3 pre-warmed instances
+const requestQueue = new RequestQueue(); // Request queue for managing bursts
 let screenshotCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -253,8 +295,10 @@ app.post('/capture', async (req, res) => {
             });
         }
         
-        // Capture screenshot
-        const screenshot = await captureScreenshot(url);
+        // Capture screenshot through queue (handles bursts)
+        const screenshot = await requestQueue.add(async () => {
+            return await captureScreenshot(url);
+        }, 0); // Priority 0 (normal)
         
         // Send response
         res.json({ screenshot });
@@ -568,10 +612,12 @@ app.post('/parse-key', async (req, res) => {
 // Health check
 app.get('/health', (req, res) => {
     const poolStats = browserPool.getStats();
+    const queueStats = requestQueue.getStats();
     
     res.json({
         status: 'healthy',
         pool: poolStats,
+        queue: queueStats,
         openai: openaiClient ? 'configured' : 'not configured',
         cache: {
             size: screenshotCache.size,
