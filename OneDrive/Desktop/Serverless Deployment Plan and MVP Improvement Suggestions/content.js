@@ -266,8 +266,8 @@
                 return;
             }
             
-            const link = event.currentTarget;
-            const url = link.href;
+            const element = event.currentTarget;
+            const url = getElementUrl(element);
             
             if (!url || url === window.location.href) {
                 return; // Don't show preview for current page
@@ -395,10 +395,11 @@
                 return;
             }
             
-            const link = target.closest('a[href]');
-            if (link && link.href) {
+            // Check for clickable element
+            const clickable = target.closest('a[href], button, [role="button"], [role="link"], [onclick], [data-href]');
+            if (clickable && isClickableElement(clickable)) {
                 handleLinkHover({ 
-                    currentTarget: link, 
+                    currentTarget: clickable, 
                     clientX: event.clientX, 
                     clientY: event.clientY 
                 });
@@ -413,25 +414,67 @@
                 return;
             }
             
-            const link = target.closest('a[href]');
-            if (link && link.href) {
-                handleLinkLeave.call(link);
+            // Check for clickable element
+            const clickable = target.closest('a[href], button, [role="button"], [role="link"], [onclick], [data-href]');
+            if (clickable && isClickableElement(clickable)) {
+                handleLinkLeave.call(clickable);
             }
         }
         
-        // Also attach directly for performance on existing links
-        function attachDirectListeners() {
-            const links = document.querySelectorAll('a[href]');
+        // Detect if element is clickable
+        function isClickableElement(element) {
+            if (!element) return false;
             
-            links.forEach(link => {
+            // Check for links
+            if (element.tagName === 'A' && element.href) return true;
+            
+            // Check for buttons
+            if (element.tagName === 'BUTTON' || element.getAttribute('role') === 'button') return true;
+            
+            // Check for elements with onclick handlers
+            if (element.onclick || element.getAttribute('onclick')) return true;
+            
+            // Check for elements with data-clickable or role attributes
+            if (element.dataset.clickable || element.getAttribute('role') === 'link') return true;
+            
+            // Check for common clickable patterns (LinkedIn, Twitter, etc.)
+            const clickableClasses = ['clickable', 'button', 'link', 'nav-item', 'action'];
+            const classList = element.className || '';
+            if (clickableClasses.some(cls => classList.includes(cls))) return true;
+            
+            return false;
+        }
+        
+        // Get URL from any clickable element
+        function getElementUrl(element) {
+            if (element.href) return element.href;
+            if (element.dataset.href) return element.dataset.href;
+            if (element.dataset.url) return element.dataset.url;
+            
+            // Check for surrounding link
+            const link = element.closest('a[href]');
+            if (link) return link.href;
+            
+            return null;
+        }
+        
+        // Also attach directly for performance on existing clickable elements
+        function attachDirectListeners() {
+            // Get all potential clickable elements
+            const clickables = document.querySelectorAll('a[href], button, [role="button"], [role="link"], [onclick], [data-href], [data-clickable]');
+            
+            clickables.forEach(element => {
                 // Skip if already has listeners
-                if (link.dataset.tooltipAttached === 'true') {
+                if (element.dataset.tooltipAttached === 'true') {
                     return;
                 }
                 
-                link.dataset.tooltipAttached = 'true';
-                link.addEventListener('mouseenter', handleLinkHover, { capture: true });
-                link.addEventListener('mouseleave', handleLinkLeave, { capture: true });
+                // Only attach if actually clickable
+                if (isClickableElement(element)) {
+                    element.dataset.tooltipAttached = 'true';
+                    element.addEventListener('mouseenter', handleLinkHover, { capture: true });
+                    element.addEventListener('mouseleave', handleLinkLeave, { capture: true });
+                }
             });
         }
         
@@ -478,30 +521,53 @@
             });
         }
         
-        // Batch precrawl function
-        window.spiderPrecrawl = async function(maxLinks = 20) {
-            const links = Array.from(document.querySelectorAll('a[href]'))
-                .slice(0, maxLinks)
-                .map(a => a.href);
+        // Batch precrawl function - works with ALL clickable elements
+        window.spiderPrecrawl = async function(maxItems = 50) {
+            // Get all clickable elements
+            const allClickables = Array.from(document.querySelectorAll('a[href], button, [role="button"], [role="link"], [onclick], [data-href], [data-clickable]'));
             
-            console.log(`🕷️ Pre-caching ${links.length} links...`);
+            // Extract URLs and filter
+            const urls = allClickables
+                .map(el => getElementUrl(el))
+                .filter(url => url && 
+                    !url.includes(window.location.hostname) &&  // Skip same-page links
+                    !url.startsWith('mailto:') &&
+                    !url.startsWith('javascript:') &&
+                    !url.startsWith('data:') &&
+                    !url.startsWith('#')
+                )
+                .filter((url, index, self) => self.indexOf(url) === index) // Remove duplicates
+                .slice(0, maxItems);
+            
+            console.log(`🕷️ Pre-caching ${urls.length} clickable elements...`);
+            console.log(`   Target: ${maxItems} | Found: ${urls.length}`);
             
             let completed = 0;
-            const promises = links.map(async (url) => {
+            let cached = 0;
+            let failed = 0;
+            
+            const promises = urls.map(async (url) => {
                 try {
                     await getScreenshot(url);
+                    cached++;
                     completed++;
-                    console.log(`   [${completed}/${links.length}] Cached: ${url}`);
+                    if (completed % 10 === 0) {
+                        console.log(`   [${completed}/${urls.length}] Progress...`);
+                    }
                 } catch (error) {
+                    failed++;
                     completed++;
-                    console.log(`   [${completed}/${links.length}] Failed: ${url}`);
+                    if (completed % 10 === 0) {
+                        console.log(`   [${completed}/${urls.length}] Progress...`);
+                    }
                 }
             });
             
             await Promise.all(promises);
             console.log(`✅ Pre-cache complete!`);
+            console.log(`   Cached: ${cached} | Failed: ${failed} | Total: ${urls.length}`);
             
-            return { cached: completed, total: links.length };
+            return { cached, failed, total: urls.length };
         };
         
         // Initialize
