@@ -25,15 +25,23 @@
 - GitHub (repo links, profile links)
 - Google Drive (file links)
 - Google Search results
+- **Wells Fargo** (buttons and links)
+- **LinkedIn** (profile links)
+- **Twitter/X** (tweet links)
+- **Wikipedia** (article links)
 
 **Test Cases:**
-1. ✅ Hover over link → tooltip appears
-2. ✅ Move mouse away → tooltip disappears
-3. ✅ Hover again → cached screenshot (instant)
-4. ✅ Batch precrawl → all links cached
-5. ✅ Service restart → cache cleared
-6. ✅ Page refresh → script cleared (expected)
-7. ✅ Dynamic content (AJAX) → new links detected
+1. ✅ Hover over link → tooltip appears (800ms delay)
+2. ✅ Hover over button → tooltip appears
+3. ✅ Move mouse away → tooltip disappears
+4. ✅ Hover again → cached screenshot (instant from IndexedDB)
+5. ✅ Batch precrawl → all links cached (20 links default)
+6. ✅ Right-click menu → all 3 options work
+7. ✅ Service restart → IndexedDB persists across sessions
+8. ✅ Page refresh → cache persists (IndexedDB)
+9. ✅ Dynamic content (AJAX) → new links detected automatically
+10. ✅ Context menu → Enable/Disable tooltips works
+11. ✅ Framework support → React, Vue, SPA apps work
 
 ---
 
@@ -41,32 +49,38 @@
 
 ### **User Documentation:**
 - `README.md` - Overview and quick start
-- `PASTE_INTO_CONSOLE.js` - Inline comments
-- `playwright_service/README.md` - Service setup
+- `playwright_service/README.md` - Backend service setup
+- `RELOAD_INSTRUCTIONS.md` - How to reload the extension
+- `TESTING_NOTES.md` - Testing checklist and notes
 
 ### **Developer Documentation:**
 - `PRD_Playwright_Tooltip_System.md` (this file)
-- `playwright_service/server.js` - Code comments
-- API endpoint examples in README
+- `playwright_service/server.js` - Backend API server
+- `content.js` - Main tooltip logic with enhanced detection
+- `background.js` - Service worker with context menu handlers
+- `manifest.json` - Extension configuration
 
 ---
 
-## 🤝 Comparison: Console Injection vs. Custom Fork
+## 🤝 Comparison: Browser Extension vs. Custom Fork
 
-| Feature | Console Injection | Custom Fork |
+| Feature | Browser Extension | Custom Fork |
 |---------|------------------|-------------|
-| **Setup Complexity** | ⭐ Simple (paste script) | ⭐⭐⭐⭐⭐ Complex (compile browser) |
-| **Browser Support** | ✅ All browsers | ❌ Custom build only |
-| **Stability** | ✅ Stable | ❌ Crashes (auto-injection bug) |
-| **Maintenance** | ✅ Easy (edit JS file) | ❌ Hard (recompile browser) |
-| **Distribution** | ✅ Copy/paste | ❌ Distribute binary (100+ MB) |
+| **Setup Complexity** | ⭐⭐ Simple (install extension) | ⭐⭐⭐⭐⭐ Complex (compile browser) |
+| **Browser Support** | ✅ Chrome, Firefox, Edge, Brave | ❌ Custom build only |
+| **Stability** | ✅ Stable (production-ready) | ❌ Crashes (auto-injection bug) |
+| **Maintenance** | ✅ Easy (update extension) | ❌ Hard (recompile browser) |
+| **Distribution** | ✅ Chrome Web Store (future) | ❌ Distribute binary (100+ MB) |
 | **Backend Needed** | ✅ Yes (localhost:3000) | ✅ Yes (same service) |
 | **Performance** | ✅ Fast | ✅ Same |
-| **User Experience** | ⚠️ Manual paste | ✅ Built-in (when working) |
-| **Development Time** | ✅ Hours | ❌ Weeks |
+| **User Experience** | ✅ Built-in, automatic | ✅ Built-in (when working) |
+| **Development Time** | ✅ Days (completed) | ❌ Weeks |
 | **Disk Space** | ✅ <100 MB | ❌ ~40 GB |
+| **Auto-Injection** | ✅ Works on all pages | ❌ Buggy |
+| **Right-Click Menu** | ✅ Integrated | ❌ Manual only |
+| **Update Method** | ✅ Browser reload | ❌ Recompile browser |
 
-**Recommendation:** **Use Console Injection** until fork auto-injection bug is fixed.
+**Recommendation:** **Browser Extension** - Production-ready solution that works out of the box.
 
 ---
 
@@ -74,30 +88,46 @@
 
 ### **What Works:**
 ✅ Playwright service captures screenshots  
-✅ Console injection displays tooltips  
-✅ Caching system works perfectly  
-✅ Compatible with all modern browsers  
+✅ **Browser extension** displays tooltips automatically  
+✅ Caching system works perfectly (IndexedDB + memory cache)  
+✅ Compatible with all modern browsers (Chrome, Firefox, Edge, Brave)  
 ✅ Fast, responsive, beautiful UI  
 ✅ Privacy-preserving (local-only)  
+✅ Enhanced button detection (React, Vue, SPA frameworks)  
+✅ Right-click context menu integration  
+✅ Precrawl functionality for batch caching  
+✅ Automatic DOM observation for dynamic content  
 
 ### **What's Required:**
 📦 **Backend Service:** `playwright_service/` running on localhost:3000  
 📦 **Node.js + Playwright:** For screenshot capture  
-📦 **Manual Console Paste:** User must inject script per-session  
+📦 **Browser Extension:** Auto-injected into all pages  
 
 ### **Deployment Model:**
 ```
 User's Machine:
   ├─ Node.js Backend (localhost:3000) [REQUIRED]
-  └─ Browser + Console Script [USER ACTION]
+  └─ Browser Extension [AUTOMATIC]
+      ├─ content.js (auto-injected on all pages)
+      ├─ background.js (service worker)
+      └─ Options page for configuration
 ```
 
-**This is a working, production-ready solution** that provides powerful link preview functionality with minimal complexity and maximum privacy.
+**This is a working, production-ready browser extension** that provides powerful link preview functionality with zero user intervention and maximum privacy.
+
+### **Key Features:**
+- ✅ **Zero Setup:** Extension works automatically on all pages
+- ✅ **Smart Detection:** Detects buttons, links, and clickable elements
+- ✅ **Right-Click Menu:** Enable/disable, precrawl, refresh cache
+- ✅ **Persistent Cache:** IndexedDB stores screenshots across sessions
+- ✅ **Memory Efficient:** Cleans up blob URLs to prevent leaks
+- ✅ **Batch Processing:** Precrawl caches multiple links at once
+- ✅ **Framework Support:** Works with React, Vue, Angular, etc.
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** October 26, 2025  
-**Status:** ✅ Implemented & Working  
-**Next Steps:** User adoption, feedback collection, potential Extension development
+**Document Version:** 2.0  
+**Last Updated:** October 27, 2025  
+**Status:** ✅ Browser Extension Implemented & Working  
+**Next Steps:** User testing, performance optimization, cloud deployment options
 
