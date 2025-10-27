@@ -20,17 +20,19 @@ This installs all dependencies including:
 Create a `.env` file in the `playwright_service` directory:
 
 ```bash
-echo "OPENAI_API_KEY=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" > .env
+echo "OPENAI_API_KEY=YOUR_API_KEY_HERE" > .env
 ```
+
+Replace `YOUR_API_KEY_HERE` with your actual OpenAI API key.
 
 **OR** set it as an environment variable before starting the server:
 
 ```bash
 # PowerShell
-$env:OPENAI_API_KEY="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"
+$env:OPENAI_API_KEY="YOUR_API_KEY_HERE"
 
 # Command Prompt
-set OPENAI_API_KEY=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
+set OPENAI_API_KEY=YOUR_API_KEY_HERE
 ```
 
 ### Step 3: Start the Backend
