@@ -1,5 +1,5 @@
-// content.js - Playwright Tooltip System
-// Displays live screenshot previews when hovering over hyperlinks
+// content.js - Tooltip Companion
+// AI-powered tooltip previews for links with context-aware assistance
 
 (function() {
     'use strict';
@@ -18,9 +18,9 @@
         const TOOLTIPS_ENABLED = items.tooltipsEnabled;
         
         const status = TOOLTIPS_ENABLED ? '✅ ENABLED' : '❌ DISABLED';
-        console.log(`${status} Playwright tooltips via Browser Extension!`);
+        console.log(`${status} Tooltip Companion is active!`);
     console.log(`   Backend Service URL: ${BACKEND_SERVICE_URL}`);
-        console.log(`   Toggle: Right-click → ${TOOLTIPS_ENABLED ? 'Disable' : 'Enable'} Playwright Tooltips`);
+        console.log(`   Toggle: Right-click → ${TOOLTIPS_ENABLED ? 'Disable' : 'Enable'} Tooltips`);
         
         // Initialize the tooltip system
         initTooltipSystem(BACKEND_SERVICE_URL, TOOLTIPS_ENABLED);
@@ -75,6 +75,22 @@
                 sendResponse({ success: false, error: 'Failed to clear cache' });
             };
             return true; // Keep the channel open for async response
+        }
+        else if (request.action === 'open-chat') {
+            console.log('💬 Opening chat widget...');
+            
+            // Find and show chat widget
+            const chatWidget = document.getElementById('playwright-chat-widget');
+            if (chatWidget) {
+                const chatToggle = document.getElementById('chat-toggle');
+                if (chatToggle) {
+                    chatToggle.click(); // Simulate click to open chat
+                }
+                sendResponse({ success: true });
+            } else {
+                sendResponse({ success: false, error: 'Chat widget not initialized' });
+            }
+            return true;
         }
         else {
             sendResponse({ success: false, error: 'Unknown action' });
@@ -847,5 +863,455 @@
         iframeObserver.observe(document.body, { childList: true, subtree: true });
         
         console.log('✅ Tooltip system initialized. Use window.spiderPrecrawl() to pre-cache links.');
+        
+        // Initialize chat widget
+        initChatWidget();
+    }
+    
+    // Initialize floating chat widget
+    function initChatWidget() {
+        // Create minimal chat widget with bubble design
+        const chatHTML = `
+            <div id="playwright-chat-widget" style="display: block; position: fixed; bottom: 20px; right: 20px; z-index: 999998; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+                <div class="chat-container" style="position: absolute; bottom: 80px; right: 0; width: 340px; height: 460px; 
+                    background: rgba(255, 255, 255, 0.98); 
+                    backdrop-filter: blur(20px);
+                    border: 1px solid rgba(0, 0, 0, 0.08);
+                    border-radius: 20px; 
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+                    display: flex; 
+                    flex-direction: column; 
+                    overflow: hidden;
+                    resize: both;
+                    min-width: 320px;
+                    min-height: 400px;
+                    max-width: 600px;
+                    max-height: 90vh;">
+                    <div class="chat-header" style="background: rgba(255, 255, 255, 1); 
+                        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+                        color: #1a1a1a; 
+                        padding: 14px 16px; 
+                        display: flex; 
+                        justify-content: space-between; 
+                        align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <img src="${chrome.runtime.getURL('icons/icon48.png')}" style="width: 24px; height: 24px;" alt="🕷️" onerror="this.style.display='none'">
+                            <span class="chat-title" style="font-weight: 600; font-size: 14px; color: #1a1a1a;">Tooltip Companion</span>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button class="chat-minimize" style="background: transparent; border: none; color: #666; font-size: 18px; cursor: pointer; padding: 4px; transition: all 0.2s; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">⎯</button>
+                            <button class="chat-close" style="background: transparent; border: none; color: #666; font-size: 18px; cursor: pointer; padding: 4px; transition: all 0.2s; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">✕</button>
+                        </div>
+                    </div>
+                    <div class="chat-messages" id="chat-messages" style="flex: 1; overflow-y: auto; padding: 16px; background: rgba(250, 250, 252, 0.98);">
+                        <div class="chat-message bot" style="margin-bottom: 12px;">
+                            <div class="message-content" style="background: #667eea; 
+                                color: white;
+                                border-radius: 18px; 
+                                padding: 10px 14px; 
+                                max-width: 75%; 
+                                font-size: 14px;">🕷️ Welcome to Tooltip Companion! How can I help you today?</div>
+                        </div>
+                    </div>
+                    <div class="chat-input-area" style="display: flex; gap: 6px; padding: 12px; background: rgba(255, 255, 255, 1); border-top: 1px solid rgba(0, 0, 0, 0.06);">
+                        <button id="chat-mic" title="Voice input" style="
+                            background: rgba(100, 181, 246, 0.1);
+                            border: 1px solid rgba(100, 181, 246, 0.2);
+                            color: #64b5f6; 
+                            border-radius: 50%; 
+                            width: 36px; 
+                            height: 36px; 
+                            cursor: pointer; 
+                            font-size: 16px; 
+                            transition: all 0.2s;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            flex-shrink: 0;">🎤</button>
+                        <input type="text" id="chat-input" placeholder="Type a message..." style="flex: 1; 
+                            background: rgba(0, 0, 0, 0.03);
+                            border: 1px solid rgba(0, 0, 0, 0.08);
+                            border-radius: 20px; 
+                            padding: 8px 14px; 
+                            font-size: 14px; 
+                            color: #1a1a1a;
+                            outline: none;
+                            transition: all 0.2s;">
+                        <button id="chat-send" style="
+                            background: #667eea;
+                            border: none;
+                            color: white; 
+                            border-radius: 50%; 
+                            width: 36px; 
+                            height: 36px; 
+                            cursor: pointer; 
+                            font-size: 16px;
+                            transition: all 0.2s;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            flex-shrink: 0;">➤</button>
+                    </div>
+                </div>
+                <button class="chat-toggle" id="chat-toggle" style="
+                    width: 56px; 
+                    height: 56px; 
+                    border-radius: 50%; 
+                    background: #667eea;
+                    border: none;
+                    color: white; 
+                    font-size: 24px; 
+                    cursor: pointer; 
+                    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+                    transition: all 0.2s;">💬</button>
+            </div>
+        `;
+        
+        const chatDiv = document.createElement('div');
+        chatDiv.innerHTML = chatHTML;
+        document.body.appendChild(chatDiv.firstElementChild);
+        
+        // Setup chat functionality
+        const chatToggle = document.getElementById('chat-toggle');
+        const chatWidget = document.getElementById('playwright-chat-widget');
+        const chatContainer = chatWidget.querySelector('.chat-container');
+        const chatInput = document.getElementById('chat-input');
+        const chatSend = document.getElementById('chat-send');
+        const chatMic = document.getElementById('chat-mic');
+        const chatMessages = document.getElementById('chat-messages');
+        const closeBtn = chatWidget.querySelector('.chat-close');
+        const minimizeBtn = chatWidget.querySelector('.chat-minimize');
+        
+        let isOpen = false;
+        let isMinimized = false;
+        
+        // Make chat toggle button always visible
+        chatToggle.style.display = 'block';
+        
+        // Make widget draggable
+        let isDragging = false;
+        let currentX = 0;
+        let currentY = 0;
+        let initialX = 0;
+        let initialY = 0;
+        let xOffset = 0;
+        let yOffset = 0;
+        
+        // Store widget position
+        let widgetX = 20;
+        let widgetY = 20;
+        
+        // Make chat header draggable
+        const chatHeader = chatContainer.querySelector('.chat-header');
+        chatHeader.style.cursor = 'move';
+        
+        // Save position function
+        function savePosition(x, y) {
+            widgetX = x;
+            widgetY = y;
+            localStorage.setItem('chat-widget-pos', JSON.stringify({ x, y }));
+        }
+        
+        // Load position function
+        function loadPosition() {
+            try {
+                const pos = JSON.parse(localStorage.getItem('chat-widget-pos'));
+                if (pos) {
+                    chatWidget.style.right = pos.x + 'px';
+                    chatWidget.style.bottom = pos.y + 'px';
+                }
+            } catch (e) {}
+        }
+        
+        // Load saved position
+        loadPosition();
+        
+        // Drag functionality for container
+        chatHeader.addEventListener('mousedown', dragStart);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+        
+        function dragStart(e) {
+            initialX = e.clientX;
+            initialY = e.clientY;
+            
+            const rect = chatWidget.getBoundingClientRect();
+            xOffset = e.clientX - rect.left;
+            yOffset = e.clientY - rect.top;
+            
+            if (e.target === chatHeader || chatHeader.contains(e.target)) {
+                isDragging = true;
+            }
+        }
+        
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+                
+                const maxX = window.innerWidth - chatWidget.offsetWidth;
+                const maxY = window.innerHeight - chatWidget.offsetHeight;
+                
+                currentX = e.clientX - xOffset;
+                currentY = e.clientY - yOffset;
+                
+                // Constrain to viewport
+                currentX = Math.max(0, Math.min(currentX, maxX));
+                currentY = Math.max(0, Math.min(currentY, maxY));
+                
+                chatWidget.style.position = 'fixed';
+                chatWidget.style.right = 'auto';
+                chatWidget.style.bottom = 'auto';
+                chatWidget.style.left = currentX + 'px';
+                chatWidget.style.top = currentY + 'px';
+            }
+        }
+        
+        function dragEnd(e) {
+            if (isDragging) {
+                isDragging = false;
+                const rect = chatWidget.getBoundingClientRect();
+                savePosition(window.innerWidth - rect.right, window.innerHeight - rect.bottom);
+            }
+        }
+        
+        // Toggle functionality
+        chatToggle.addEventListener('click', () => {
+            if (!isOpen) {
+                chatContainer.style.display = 'flex';
+                chatWidget.style.display = 'block';
+                isOpen = true;
+            } else if (isMinimized) {
+                chatContainer.classList.remove('minimized');
+                chatContainer.style.display = 'flex';
+                chatContainer.style.height = '500px';
+                isMinimized = false;
+            } else {
+                chatContainer.style.height = '0px';
+                chatContainer.classList.add('minimized');
+                isMinimized = true;
+            }
+        });
+        
+        closeBtn.addEventListener('click', () => {
+            chatContainer.style.display = 'none';
+            isOpen = false;
+            isMinimized = false;
+        });
+        
+        minimizeBtn.addEventListener('click', () => {
+            chatContainer.style.height = '0px';
+            chatContainer.classList.add('minimized');
+            isMinimized = true;
+        });
+        
+        // Capture console logs
+        const consoleLogs = [];
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        console.log = function(...args) {
+            consoleLogs.push({ level: 'log', message: args.join(' '), timestamp: Date.now() });
+            originalLog.apply(console, args);
+        };
+        
+        console.error = function(...args) {
+            consoleLogs.push({ level: 'error', message: args.join(' '), timestamp: Date.now() });
+            originalError.apply(console, args);
+        };
+        
+        console.warn = function(...args) {
+            consoleLogs.push({ level: 'warn', message: args.join(' '), timestamp: Date.now() });
+            originalWarn.apply(console, args);
+        };
+        
+        // Keep last 50 logs
+        if (consoleLogs.length > 50) {
+            consoleLogs.splice(0, consoleLogs.length - 50);
+        }
+        
+        function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            addMessage(message, 'user');
+            chatInput.value = '';
+            
+            // Get page info
+            const pageInfo = {
+                title: document.title,
+                url: window.location.href,
+                description: document.querySelector('meta[name="description"]')?.content
+            };
+            
+            // Get API key from storage
+            chrome.storage.sync.get({ openaiKey: '' }, (items) => {
+                console.log('🔑 API Key from storage:', items.openaiKey ? 'Set' : 'Not set');
+                
+                chrome.runtime.sendMessage({
+                    action: 'chat',
+                    message: message,
+                    url: window.location.href,
+                    consoleLogs: consoleLogs.slice(-10), // Last 10 console entries
+                    pageInfo: pageInfo,
+                    openaiKey: items.openaiKey || ''
+                }, (response) => {
+                    console.log('📨 Chat response:', response);
+                    if (response && response.reply) {
+                        addMessage(response.reply, 'bot');
+                    } else {
+                        addMessage('Backend service unavailable. Make sure backend is running on localhost:3000', 'bot');
+                    }
+                });
+            });
+        }
+        
+        chatSend.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+        
+        // Voice input support using Web Speech API (no API key needed!)
+        let isRecording = false;
+        let recognition = null;
+        
+        chatMic.addEventListener('click', () => {
+            if (!isRecording) {
+                // Check if browser supports Web Speech API
+                if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                    addMessage('⚠️ Voice input not supported in this browser. Please type instead.', 'bot');
+                    return;
+                }
+                
+                try {
+                    addMessage('🎤 Listening... Speak now!', 'bot');
+                    
+                    // Create Speech Recognition
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    recognition = new SpeechRecognition();
+                    recognition.continuous = false;
+                    recognition.interimResults = false;
+                    recognition.lang = 'en-US';
+                    
+                    recognition.onstart = () => {
+                        isRecording = true;
+                        chatMic.innerHTML = '⏹️';
+                        chatMic.style.background = 'rgba(244, 67, 54, 0.3)';
+                        chatMic.style.borderColor = 'rgba(244, 67, 54, 0.6)';
+                        chatMic.style.color = '#ff5252';
+                    };
+                    
+                    recognition.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        chatInput.value = transcript;
+                        sendMessage();
+                    };
+                    
+                    recognition.onerror = (event) => {
+                        addMessage('⚠️ Speech recognition error. Please type instead.', 'bot');
+                        isRecording = false;
+                        chatMic.innerHTML = '🎤';
+                        chatMic.style.background = 'rgba(100, 181, 246, 0.2)';
+                        chatMic.style.borderColor = 'rgba(100, 181, 246, 0.4)';
+                        chatMic.style.color = '#64b5f6';
+                    };
+                    
+                    recognition.onend = () => {
+                        isRecording = false;
+                        chatMic.innerHTML = '🎤';
+                        chatMic.style.background = 'rgba(100, 181, 246, 0.2)';
+                        chatMic.style.borderColor = 'rgba(100, 181, 246, 0.4)';
+                        chatMic.style.color = '#64b5f6';
+                    };
+                    
+                    recognition.start();
+                    
+                } catch (error) {
+                    addMessage('⚠️ Could not start voice input: ' + error.message, 'bot');
+                }
+            } else {
+                // Stop recording
+                if (recognition) {
+                    recognition.stop();
+                }
+                isRecording = false;
+                chatMic.innerHTML = '🎤';
+                chatMic.style.background = 'rgba(100, 181, 246, 0.2)';
+                chatMic.style.borderColor = 'rgba(100, 181, 246, 0.4)';
+                chatMic.style.color = '#64b5f6';
+            }
+        });
+        
+        function addMessage(text, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${type}`;
+            messageDiv.style.marginBottom = '12px';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            if (type === 'user') {
+                messageDiv.style.display = 'flex';
+                messageDiv.style.justifyContent = 'flex-end';
+                contentDiv.style.background = '#667eea';
+                contentDiv.style.color = 'white';
+                contentDiv.style.borderRadius = '18px 18px 4px 18px';
+            } else {
+                contentDiv.style.background = '#667eea';
+                contentDiv.style.color = 'white';
+                contentDiv.style.borderRadius = '18px 18px 18px 4px';
+            }
+            
+            contentDiv.style.padding = '10px 14px';
+            contentDiv.style.maxWidth = '75%';
+            contentDiv.style.fontSize = '14px';
+            contentDiv.style.lineHeight = '1.4';
+            contentDiv.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+            
+            const p = document.createElement('p');
+            p.style.margin = '0';
+            p.style.color = 'inherit';
+            p.textContent = text;
+            
+            contentDiv.appendChild(p);
+            messageDiv.appendChild(contentDiv);
+            chatMessages.appendChild(messageDiv);
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Style inputs on focus
+        chatInput.addEventListener('focus', () => {
+            chatInput.style.borderColor = '#667eea';
+            chatInput.style.boxShadow = '0 0 0 2px rgba(102, 126, 234, 0.1)';
+        });
+        
+        chatInput.addEventListener('blur', () => {
+            chatInput.style.borderColor = 'rgba(0, 0, 0, 0.08)';
+            chatInput.style.boxShadow = 'none';
+        });
+        
+        // Hover effects
+        chatSend.addEventListener('mouseenter', () => {
+            chatSend.style.transform = 'scale(1.05)';
+            chatSend.style.background = '#5a67d8';
+            chatSend.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+        });
+        chatSend.addEventListener('mouseleave', () => {
+            chatSend.style.transform = 'scale(1)';
+            chatSend.style.background = '#667eea';
+            chatSend.style.boxShadow = 'none';
+        });
+        
+        chatMic.addEventListener('mouseenter', () => {
+            chatMic.style.background = 'rgba(100, 181, 246, 0.2)';
+            chatMic.style.borderColor = 'rgba(100, 181, 246, 0.4)';
+        });
+        chatMic.addEventListener('mouseleave', () => {
+            chatMic.style.background = 'rgba(100, 181, 246, 0.1)';
+            chatMic.style.borderColor = 'rgba(100, 181, 246, 0.2)';
+        });
+        
+        console.log('✅ Chat widget initialized');
     }
 })();
