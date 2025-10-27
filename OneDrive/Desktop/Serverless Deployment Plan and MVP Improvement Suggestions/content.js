@@ -371,6 +371,16 @@
                 return;
             }
             
+            // Skip LinkedIn auth/session URLs (likely to return 500)
+            if (url.includes('linkedin.com/me/') || 
+                url.includes('/profile-views/') ||
+                url.includes('tscp?destination') ||
+                url.includes('/authenticate') ||
+                url.includes('/login')) {
+                console.log(`⏭️ Skipping auth/session URL: ${url}`);
+                return;
+            }
+            
             // Cancel any pending hide operations
             if (activeTooltip.hideTimeout) {
                 clearTimeout(activeTooltip.hideTimeout);
