@@ -714,6 +714,84 @@ app.get('/ocr', (req, res) => {
     });
 });
 
+// OCR upload endpoint for live image uploads
+app.post('/ocr-upload', async (req, res) => {
+    try {
+        const { image } = req.body;
+        
+        if (!image) {
+            return res.status(400).json({
+                error: 'Missing image parameter',
+                message: 'Please provide an image in base64 format'
+            });
+        }
+        
+        console.log('📷 Processing uploaded image for OCR...');
+        
+        // Extract base64 data
+        const base64Data = image.includes(',') ? image.split(',')[1] : image;
+        
+        // Save to temp file
+        const fs = require('fs');
+        const path = require('path');
+        const tempPath = path.join(__dirname, 'temp_upload_' + Date.now() + '.png');
+        
+        fs.writeFileSync(tempPath, Buffer.from(base64Data, 'base64'));
+        
+        // Run OCR
+        const { spawnSync } = require('child_process');
+        const ocrPath = path.join(__dirname, '..', 'Smart Parser and OCR Integration for API Keys and Annotations', 'ocr_processor.py');
+        
+        const env = { ...process.env };
+        if (!env.PATH) {
+            env.PATH = 'C:\\Program Files\\Tesseract-OCR';
+        } else if (typeof env.PATH === 'string' && !env.PATH.includes('Tesseract-OCR')) {
+            env.PATH = 'C:\\Program Files\\Tesseract-OCR;' + env.PATH;
+        }
+        
+        const result = spawnSync('python', [ocrPath, tempPath], {
+            encoding: 'utf8',
+            env: env
+        });
+        
+        // Clean up
+        fs.unlinkSync(tempPath);
+        
+        if (result.status === 0 && result.stdout) {
+            try {
+                const ocrData = JSON.parse(result.stdout);
+                if (ocrData.full_text_context && !ocrData.error) {
+                    console.log(`✅ OCR extracted ${ocrData.full_text_context.length} characters`);
+                    return res.json({
+                        status: 'success',
+                        ocrText: ocrData.full_text_context,
+                        characterCount: ocrData.full_text_context.length
+                    });
+                } else if (ocrData.error) {
+                    return res.json({
+                        status: 'error',
+                        error: ocrData.error
+                    });
+                }
+            } catch (parseError) {
+                console.error('OCR parse error:', parseError.message);
+            }
+        }
+        
+        res.json({
+            status: 'error',
+            error: 'Failed to extract OCR text from uploaded image'
+        });
+        
+    } catch (error) {
+        console.error('❌ OCR upload error:', error.message);
+        res.status(500).json({
+            status: 'error',
+            error: error.message
+        });
+    }
+});
+
 // Health check
 app.get('/health', (req, res) => {
     const poolStats = browserPool.getStats();

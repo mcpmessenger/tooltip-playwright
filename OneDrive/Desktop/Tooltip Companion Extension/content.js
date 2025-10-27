@@ -1127,10 +1127,11 @@
                         </div>
                     </div>
                     <div class="chat-input-area" style="display: flex; gap: 6px; padding: 12px; background: rgba(255, 255, 255, 1); border-top: 1px solid rgba(0, 0, 0, 0.06);">
-                        <button id="chat-mic" title="Voice input" style="
-                            background: rgba(100, 181, 246, 0.1);
-                            border: 1px solid rgba(100, 181, 246, 0.2);
-                            color: #64b5f6; 
+                        <input type="file" id="chat-upload-input" accept="image/*" style="display: none;">
+                        <button id="chat-upload" title="Upload image for OCR" style="
+                            background: rgba(102, 126, 234, 0.1);
+                            border: 1px solid rgba(102, 126, 234, 0.2);
+                            color: #667eea; 
                             border-radius: 50%; 
                             width: 36px; 
                             height: 36px; 
@@ -1140,7 +1141,7 @@
                             display: flex;
                             align-items: center;
                             justify-content: center;
-                            flex-shrink: 0;">🎤</button>
+                            flex-shrink: 0;">📷</button>
                         <input type="text" id="chat-input" placeholder="Type a message..." style="flex: 1; 
                             background: rgba(0, 0, 0, 0.03);
                             border: 1px solid rgba(0, 0, 0, 0.08);
@@ -1190,7 +1191,8 @@
         const chatContainer = chatWidget.querySelector('.chat-container');
         const chatInput = document.getElementById('chat-input');
         const chatSend = document.getElementById('chat-send');
-        const chatMic = document.getElementById('chat-mic');
+        const chatUpload = document.getElementById('chat-upload');
+        const chatUploadInput = document.getElementById('chat-upload-input');
         const chatMessages = document.getElementById('chat-messages');
         const closeBtn = chatWidget.querySelector('.chat-close');
         const minimizeBtn = chatWidget.querySelector('.chat-minimize');
@@ -1415,75 +1417,58 @@
             if (e.key === 'Enter') sendMessage();
         });
         
-        // Voice input support using Web Speech API (no API key needed!)
-        let isRecording = false;
-        let recognition = null;
+        // Image upload for OCR
+        chatUpload.addEventListener('click', () => {
+            chatUploadInput.click();
+        });
         
-        chatMic.addEventListener('click', () => {
-            if (!isRecording) {
-                // Check if browser supports Web Speech API
-                if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                    addMessage('⚠️ Voice input not supported in this browser. Please type instead.', 'bot');
-                    return;
-                }
+        chatUploadInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (!file.type.startsWith('image/')) {
+                addMessage('⚠️ Please upload an image file.', 'bot');
+                return;
+            }
+            
+            addMessage(`📷 Processing image: ${file.name}`, 'bot');
+            
+            // Convert to base64
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const base64Image = e.target.result;
                 
                 try {
-                    addMessage('🎤 Listening... Speak now!', 'bot');
+                    // Send to backend for OCR
+                    const response = await fetch(`${BACKEND_SERVICE_URL}/ocr-upload`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: base64Image })
+                    });
                     
-                    // Create Speech Recognition
-                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                    recognition = new SpeechRecognition();
-                    recognition.continuous = false;
-                    recognition.interimResults = false;
-                    recognition.lang = 'en-US';
+                    const data = await response.json();
                     
-                    recognition.onstart = () => {
-                        isRecording = true;
-                        chatMic.innerHTML = '⏹️';
-                        chatMic.style.background = 'rgba(244, 67, 54, 0.3)';
-                        chatMic.style.borderColor = 'rgba(244, 67, 54, 0.6)';
-                        chatMic.style.color = '#ff5252';
-                    };
-                    
-                    recognition.onresult = (event) => {
-                        const transcript = event.results[0][0].transcript;
-                        chatInput.value = transcript;
-                        sendMessage();
-                    };
-                    
-                    recognition.onerror = (event) => {
-                        addMessage('⚠️ Speech recognition error. Please type instead.', 'bot');
-                        isRecording = false;
-                        chatMic.innerHTML = '🎤';
-                        chatMic.style.background = 'rgba(100, 181, 246, 0.2)';
-                        chatMic.style.borderColor = 'rgba(100, 181, 246, 0.4)';
-                        chatMic.style.color = '#64b5f6';
-                    };
-                    
-                    recognition.onend = () => {
-                        isRecording = false;
-                        chatMic.innerHTML = '🎤';
-                        chatMic.style.background = 'rgba(100, 181, 246, 0.2)';
-                        chatMic.style.borderColor = 'rgba(100, 181, 246, 0.4)';
-                        chatMic.style.color = '#64b5f6';
-                    };
-                    
-                    recognition.start();
-                    
+                    if (data.ocrText) {
+                        // Show OCR results
+                        addMessage(`📝 OCR Text Extracted:\n\n${data.ocrText}`, 'bot');
+                        
+                        // Auto-fill input for user to ask questions about it
+                        chatInput.value = 'What does this text say?';
+                        addMessage('💡 Tip: Ask questions about the extracted text!', 'bot');
+                    } else if (data.error) {
+                        addMessage(`❌ OCR Error: ${data.error}`, 'bot');
+                    } else {
+                        addMessage('⚠️ No OCR text could be extracted from this image.', 'bot');
+                    }
                 } catch (error) {
-                    addMessage('⚠️ Could not start voice input: ' + error.message, 'bot');
+                    addMessage(`❌ Failed to process image: ${error.message}`, 'bot');
                 }
-            } else {
-                // Stop recording
-                if (recognition) {
-                    recognition.stop();
-                }
-                isRecording = false;
-                chatMic.innerHTML = '🎤';
-                chatMic.style.background = 'rgba(100, 181, 246, 0.2)';
-                chatMic.style.borderColor = 'rgba(100, 181, 246, 0.4)';
-                chatMic.style.color = '#64b5f6';
-            }
+            };
+            
+            reader.readAsDataURL(file);
+            
+            // Reset input
+            chatUploadInput.value = '';
         });
         
         function addMessage(text, type) {
@@ -1547,13 +1532,13 @@
             chatSend.style.boxShadow = 'none';
         });
         
-        chatMic.addEventListener('mouseenter', () => {
-            chatMic.style.background = 'rgba(100, 181, 246, 0.2)';
-            chatMic.style.borderColor = 'rgba(100, 181, 246, 0.4)';
+        chatUpload.addEventListener('mouseenter', () => {
+            chatUpload.style.background = 'rgba(102, 126, 234, 0.2)';
+            chatUpload.style.borderColor = 'rgba(102, 126, 234, 0.4)';
         });
-        chatMic.addEventListener('mouseleave', () => {
-            chatMic.style.background = 'rgba(100, 181, 246, 0.1)';
-            chatMic.style.borderColor = 'rgba(100, 181, 246, 0.2)';
+        chatUpload.addEventListener('mouseleave', () => {
+            chatUpload.style.background = 'rgba(102, 126, 234, 0.1)';
+            chatUpload.style.borderColor = 'rgba(102, 126, 234, 0.2)';
         });
         
         console.log('✅ Chat widget initialized');
