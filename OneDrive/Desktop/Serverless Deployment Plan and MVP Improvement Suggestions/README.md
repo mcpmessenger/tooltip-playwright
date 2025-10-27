@@ -1,10 +1,10 @@
-# Playwright Tooltip System
+# 🕷️ Tooltip Companion
 
-A browser extension that displays live screenshot previews when hovering over hyperlinks, powered by a Playwright backend service.
+AI-powered browser extension that displays live screenshot previews when hovering over hyperlinks, with context-aware assistance and intelligent caching. Visit [tooltipcompanion.com](https://tooltipcompanion.com)
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.2-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Platform](https://img.shields.io/badge/platform-Chrome%20%7C%20Firefox%20%7C%20Edge-lightgrey)
+![Platform](https://img.shields.io/badge/platform-Chrome%20%7C%20Edge-lightgrey)
 
 ## 📖 Table of Contents
 
@@ -23,14 +23,17 @@ A browser extension that displays live screenshot previews when hovering over hy
 ## ✨ Features
 
 - 🎯 **Hover Preview**: Instantly see what's behind any link before clicking
+- 🤖 **AI-Powered Chat**: Context-aware assistant with screenshot analysis
 - ⚡ **Smart Caching**: Screenshots cached for 5 minutes for lightning-fast display
 - 🚀 **Batch Precrawl**: Pre-cache up to 20 links on the current page
+- 🎤 **Voice Input**: Speak to AI assistant using browser speech recognition
 - 🔄 **Dynamic Content**: Automatically detects AJAX-loaded links
 - 🎨 **Smooth Animations**: Beautiful tooltips with 60fps animations
 - 🌐 **Universal Compatibility**: Works on all modern websites
-- 🛡️ **Privacy-First**: All processing happens locally
+- 🛡️ **Privacy-First**: Process data locally with optional AI features
 - ⚙️ **Easy Toggle**: Right-click to enable/disable tooltips anytime
-- 📱 **Stable UX**: Advanced anti-flicker system for consistent behavior
+- 💬 **Resizable Chat**: Drag-to-resize AI assistant widget
+- 🌙 **Dark Mode**: Obsidian glass-morphism UI with shimmering effects
 
 ## 🖼️ Screenshots
 
@@ -86,8 +89,21 @@ The service will run on `http://localhost:3000`
 #### Toggle Tooltips On/Off
 
 - **Right-click** anywhere on a page
-- Select "Enable/Disable Playwright Tooltips"
+- Select "Enable/Disable Tooltips"
 - Works instantly across all tabs
+
+#### AI Chat Assistant
+
+- **Right-click** → "Open AI Chat Widget"
+- Ask questions about the current page
+- Use voice input with the mic button
+- Drag to resize the chat widget
+
+#### Configure OpenAI API Key
+
+1. Click extension icon → Options
+2. Enter your OpenAI API key
+3. Save to enable AI chat features
 
 #### Batch Pre-cache Links
 
@@ -283,7 +299,7 @@ cd playwright_service
 npm start
 
 # Should see:
-# 🚀 Playwright Tooltip Backend Service
+# 🚀 Tooltip Companion Backend Service
 # 📡 Server running on http://localhost:3000
 ```
 
@@ -337,4 +353,4 @@ If you find this project useful, please consider giving it a star ⭐
 
 ---
 
-**Made with ❤️ by the Playwright Tooltip Team**
+**Made with ❤️ by the Tooltip Companion Team**
