@@ -1069,11 +1069,11 @@
         }, 1000);
         
         // Initialize chat widget
-        initChatWidget();
+        initChatWidget(BACKEND_SERVICE_URL);
     }
     
     // Initialize floating chat widget
-    function initChatWidget() {
+    function initChatWidget(backendUrl) {
         // Create minimal chat widget with bubble design
         const chatHTML = `
             <div id="playwright-chat-widget" style="display: block; position: fixed; bottom: 20px; right: 20px; z-index: 999998; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
@@ -1440,7 +1440,7 @@
                 
                 try {
                     // Send to backend for OCR
-                    const response = await fetch(`${BACKEND_SERVICE_URL}/ocr-upload`, {
+                    const response = await fetch(`${backendUrl}/ocr-upload`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ image: base64Image })
