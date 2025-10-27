@@ -12,12 +12,19 @@
 </head>
 <body>
     <h1>Playwright Tooltip System Settings</h1>
-    <p>Configure the URL for your Playwright Screenshot Backend Service.</p>
+    <p>Configure your Playwright Tooltip System settings.</p>
 
-    <label for="backendUrl">Backend Service URL (e.g., http://localhost:3000 or your AWS API Gateway URL):</label>
+    <label for="backendUrl">Backend Service URL (e.g., http://localhost:3000):</label>
     <input type="url" id="backendUrl" required>
 
+    <label for="openaiKey">OpenAI API Key (Optional - for AI chat features):</label>
+    <input type="password" id="openaiKey" placeholder="sk-proj-..." style="width: 400px; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
+
     <button id="saveButton">Save Settings</button>
+    
+    <p style="margin-top: 20px; font-size: 12px; color: #666;">
+        Get your OpenAI API key at: <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a>
+    </p>
     <div id="status"></div>
 
     <script src="options.js"></script>
