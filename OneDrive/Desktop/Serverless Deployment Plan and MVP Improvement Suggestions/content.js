@@ -260,8 +260,8 @@
                     timestamp: Date.now()
                 });
                 
-                // Also save to IndexedDB for persistence
-                await saveToIndexedDB(url, blobUrl);
+                // Also save to IndexedDB for persistence (save base64 data, not blob URL)
+                await saveToIndexedDB(url, base64Data);
                 
                 console.log(`✅ Screenshot cached successfully`);
                 return blobUrl;
@@ -284,9 +284,36 @@
                     request.onsuccess = () => {
                         if (request.result && isCacheValid(request.result)) {
                             console.log(`📦 IndexedDB hit: ${url}`);
+                            
+                            // Convert base64 to blob if needed
+                            let blobUrl = request.result.screenshotUrl;
+                            
+                            // If it's base64 data, convert to blob
+                            if (typeof request.result.screenshotUrl === 'string' && 
+                                !request.result.screenshotUrl.startsWith('blob:') && 
+                                !request.result.screenshotUrl.startsWith('http')) {
+                                try {
+                                    const binaryString = atob(request.result.screenshotUrl);
+                                    const bytes = new Uint8Array(binaryString.length);
+                                    for (let i = 0; i < binaryString.length; i++) {
+                                        bytes[i] = binaryString.charCodeAt(i);
+                                    }
+                                    const blob = new Blob([bytes], { type: 'image/png' });
+                                    blobUrl = URL.createObjectURL(blob);
+                                } catch (e) {
+                                    console.warn('Failed to convert base64 to blob:', e);
+                                    resolve(null);
+                                    return;
+                                }
+                            }
+                            
                             // Also update memory cache
-                            cache.set(url, request.result);
-                            resolve(request.result.screenshotUrl);
+                            cache.set(url, {
+                                screenshotUrl: blobUrl,
+                                timestamp: request.result.timestamp
+                            });
+                            
+                            resolve(blobUrl);
                         } else {
                             resolve(null);
                         }
@@ -300,13 +327,13 @@
         }
         
         // Save screenshot to IndexedDB
-        async function saveToIndexedDB(url, screenshotUrl) {
+        async function saveToIndexedDB(url, dataToSave) {
             if (!db) return;
             
             try {
                 const data = {
                     url: url,
-                    screenshotUrl: screenshotUrl,
+                    screenshotUrl: dataToSave, // Can be base64 data or blob URL
                     timestamp: Date.now()
                 };
                 
