@@ -426,6 +426,121 @@
             return screenshotUrl;
         }
         
+        // Extract info from local button
+        function getLocalButtonInfo(element) {
+            const info = {
+                text: '',
+                type: 'button',
+                label: '',
+                purpose: '',
+                shortcut: '',
+                state: 'enabled'
+            };
+            
+            // Get button text
+            info.text = element.textContent?.trim() || element.innerText?.trim() || '';
+            
+            // Get aria-label or title
+            info.label = element.getAttribute('aria-label') || element.getAttribute('title') || info.text;
+            
+            // Detect button type
+            if (element.tagName === 'BUTTON' || element.type === 'button') {
+                info.type = 'button';
+            } else if (element.type === 'submit') {
+                info.type = 'submit';
+            } else if (element.type === 'reset') {
+                info.type = 'reset';
+            } else if (element.getAttribute('role') === 'button') {
+                info.type = 'button';
+            }
+            
+            // Get state
+            if (element.disabled || element.hasAttribute('disabled')) {
+                info.state = 'disabled';
+            }
+            
+            // Detect purpose from text
+            const lowerText = info.text.toLowerCase();
+            if (lowerText.includes('submit') || lowerText.includes('send')) {
+                info.purpose = 'Submits form';
+            } else if (lowerText.includes('save')) {
+                info.purpose = 'Saves changes';
+            } else if (lowerText.includes('cancel')) {
+                info.purpose = 'Cancels action';
+            } else if (lowerText.includes('delete') || lowerText.includes('remove')) {
+                info.purpose = 'Deletes item';
+            } else if (lowerText.includes('add') || lowerText.includes('create')) {
+                info.purpose = 'Creates new item';
+            } else if (lowerText.includes('edit')) {
+                info.purpose = 'Edit item';
+            } else if (lowerText.includes('search')) {
+                info.purpose = 'Searches';
+            } else if (lowerText.includes('close')) {
+                info.purpose = 'Closes dialog';
+            }
+            
+            // Get keyboard shortcut
+            const accesskey = element.getAttribute('accesskey');
+            if (accesskey) {
+                info.shortcut = `Alt+${accesskey.toUpperCase()}`;
+            }
+            
+            return info;
+        }
+        
+        // Show info tooltip for local button
+        function showInfoTooltip(x, y, buttonInfo) {
+            if (!tooltipDiv) {
+                tooltipDiv = createTooltipElement();
+            }
+            
+            const stateIcon = buttonInfo.state === 'disabled' ? '❌' : '✅';
+            const typeIcon = buttonInfo.type === 'submit' ? '📤' : 
+                            buttonInfo.type === 'reset' ? '🔄' : '🔘';
+            
+            tooltipDiv.innerHTML = `
+                <div style="padding: 12px; min-width: 200px; max-width: ${MAX_TOOLTIP_WIDTH}px;">
+                    <div style="font-weight: 600; font-size: 14px; color: #667eea; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        ${typeIcon} <span>${buttonInfo.label || buttonInfo.text || 'Button'}</span>
+                    </div>
+                    ${buttonInfo.purpose ? `<div style="font-size: 12px; color: #666; margin-bottom: 6px;">${buttonInfo.purpose}</div>` : ''}
+                    ${buttonInfo.shortcut ? `<div style="font-size: 11px; color: #999; font-style: italic;">⌨️ ${buttonInfo.shortcut}</div>` : ''}
+                    <div style="font-size: 10px; color: #aaa; margin-top: 8px; padding-top: 6px; border-top: 1px solid #eee;">
+                        ${stateIcon} ${buttonInfo.state}
+                    </div>
+                </div>
+            `;
+            
+            tooltipDiv.style.display = 'block';
+            
+            // Position tooltip
+            requestAnimationFrame(() => {
+                const rect = tooltipDiv.getBoundingClientRect();
+                let left = x + 10;
+                let top = y + 10;
+                
+                if (left + rect.width > window.innerWidth) {
+                    left = x - rect.width - 10;
+                }
+                if (left < 0) left = 10;
+                
+                if (top + rect.height > window.innerHeight) {
+                    top = y - rect.height - 10;
+                }
+                if (top < 0) top = 10;
+                
+                tooltipDiv.style.left = left + 'px';
+                tooltipDiv.style.top = top + 'px';
+                
+                setTimeout(() => {
+                    tooltipDiv.style.opacity = '1';
+                }, 10);
+            });
+            
+            activeTooltip.isVisible = true;
+            activeTooltip.displayStartTime = Date.now();
+        }
+        
         // Handle link hover
         function handleLinkHover(event) {
             // Check if tooltips are enabled
@@ -436,8 +551,21 @@
             const element = event.currentTarget;
             const url = getElementUrl(element);
             
-            if (!url || url === window.location.href) {
-                return; // Don't show preview for current page
+            // Handle local buttons (no URL or same-page links)
+            if (!url || url === window.location.href || url.startsWith('#') || url.startsWith('/') && !url.startsWith('http')) {
+                // Check if it's a button or interactive element
+                const isButton = element.tagName === 'BUTTON' || 
+                                 element.getAttribute('role') === 'button' || 
+                                 element.type === 'button' || 
+                                 element.type === 'submit' ||
+                                 element.type === 'reset';
+                
+                if (isButton) {
+                    // Show info tooltip for local button
+                    const buttonInfo = getLocalButtonInfo(element);
+                    showInfoTooltip(event.clientX, event.clientY, buttonInfo);
+                }
+                return;
             }
             
             // Skip mailto: links (email addresses)
