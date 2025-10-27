@@ -1422,16 +1422,44 @@
             chatUploadInput.click();
         });
         
-        chatUploadInput.addEventListener('change', async (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
+        // Drag and drop image
+        chatContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            chatContainer.style.border = '2px dashed #667eea';
+        });
+        
+        chatContainer.addEventListener('dragleave', () => {
+            chatContainer.style.border = '';
+        });
+        
+        chatContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            chatContainer.style.border = '';
             
-            if (!file.type.startsWith('image/')) {
-                addMessage('⚠️ Please upload an image file.', 'bot');
-                return;
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type.startsWith('image/')) {
+                handleImageUpload(files[0]);
+            } else {
+                addMessage('⚠️ Please drop an image file.', 'bot');
             }
-            
-            addMessage(`📷 Processing image: ${file.name}`, 'bot');
+        });
+        
+        // Paste image from clipboard
+        chatInput.addEventListener('paste', (e) => {
+            const items = e.clipboardData.items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.startsWith('image/')) {
+                    e.preventDefault();
+                    const blob = items[i].getAsFile();
+                    handleImageUpload(blob);
+                    return;
+                }
+            }
+        });
+        
+        // Handle image upload (for drag-drop and paste)
+        async function handleImageUpload(file) {
+            addMessage(`📷 Processing image: ${file.name || 'from clipboard'}`, 'bot');
             
             // Convert to base64
             const reader = new FileReader();
@@ -1466,6 +1494,18 @@
             };
             
             reader.readAsDataURL(file);
+        }
+        
+        chatUploadInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (!file.type.startsWith('image/')) {
+                addMessage('⚠️ Please upload an image file.', 'bot');
+                return;
+            }
+            
+            handleImageUpload(file);
             
             // Reset input
             chatUploadInput.value = '';
