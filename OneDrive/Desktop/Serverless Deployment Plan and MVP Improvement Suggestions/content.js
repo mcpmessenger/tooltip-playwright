@@ -292,15 +292,15 @@
             if (activeTooltip.hideTimeout) {
                 clearTimeout(activeTooltip.hideTimeout);
                 activeTooltip.hideTimeout = null;
-                // If tooltip is already showing and mouse is still over link, just update position
+                // If tooltip is already showing and mouse is still over element, just update position
                 if (activeTooltip.isVisible && activeTooltip.currentUrl === url && tooltipDiv) {
                     // Don't hide, just let it stay
                     return;
                 }
             }
             
-            // If hovering over the same link and tooltip is showing, don't re-trigger
-            if (activeTooltip.currentUrl === url && activeTooltip.element === link && activeTooltip.isVisible) {
+            // If hovering over the same element and tooltip is showing, don't re-trigger
+            if (activeTooltip.currentUrl === url && activeTooltip.element === element && activeTooltip.isVisible) {
                 return;
             }
             
@@ -310,8 +310,8 @@
                 activeTooltip.timeout = null;
             }
             
-            // Set active link
-            activeTooltip.element = link;
+            // Set active element
+            activeTooltip.element = element;
             activeTooltip.currentUrl = url;
             
             // Check cache first
@@ -319,7 +319,7 @@
             if (cacheEntry && isCacheValid(cacheEntry)) {
                 // Cached - show after short delay
                 activeTooltip.timeout = setTimeout(() => {
-                    if (activeTooltip.element === link && activeTooltip.currentUrl === url && !activeTooltip.isVisible) {
+                    if (activeTooltip.element === element && activeTooltip.currentUrl === url && !activeTooltip.isVisible) {
                         showTooltip(event.clientX, event.clientY, cacheEntry.screenshotUrl);
                     }
                 }, HOVER_DELAY);
@@ -328,8 +328,8 @@
             
             // Not cached - fetch with delay
             activeTooltip.timeout = setTimeout(() => {
-                // Only proceed if still on same link and not already visible
-                if (activeTooltip.element === link && activeTooltip.currentUrl === url && !activeTooltip.isVisible) {
+                // Only proceed if still on same element and not already visible
+                if (activeTooltip.element === element && activeTooltip.currentUrl === url && !activeTooltip.isVisible) {
                     // Show loading
                     showTooltip(event.clientX, event.clientY, null);
                     
@@ -337,7 +337,7 @@
                     getScreenshot(url)
                         .then(screenshotUrl => {
                             // Check if still valid before showing
-                            if (activeTooltip.element === link && activeTooltip.currentUrl === url) {
+                            if (activeTooltip.element === element && activeTooltip.currentUrl === url) {
                                 // Replace loading with screenshot
                                 if (tooltipDiv) {
                                     tooltipDiv.innerHTML = `<img src="${screenshotUrl}" 
@@ -349,7 +349,7 @@
                         })
                         .catch(error => {
                             console.warn('Failed to load screenshot:', error);
-                            if (activeTooltip.element === link && activeTooltip.currentUrl === url && tooltipDiv) {
+                            if (activeTooltip.element === element && activeTooltip.currentUrl === url && tooltipDiv) {
                                 tooltipDiv.innerHTML = `<div style="padding: 15px; text-align: center; color: #d32f2f; font-size: 12px;">⚠️ Failed to load</div>`;
                             }
                         });
