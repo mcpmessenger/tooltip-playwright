@@ -1,32 +1,359 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Tooltip System Settings</title>
+    <meta charset="UTF-8">
+    <title>Tooltip Companion Settings</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        label { display: block; margin-top: 10px; font-weight: bold; }
-        input[type="url"] { width: 400px; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 10px 15px; margin-top: 20px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        #status { margin-top: 15px; font-weight: bold; }
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #1a1a1a;
+            --input-bg: #ffffff;
+            --input-border: #ccc;
+            --button-bg: #667eea;
+            --button-hover: #5a67d8;
+            --section-bg: #f5f5f5;
+            --header-bg: linear-gradient(135deg, #667eea, #764ba2);
+        }
+        
+        body.dark-mode {
+            --bg-color: #0a0a0a;
+            --text-color: #e0e0e0;
+            --input-bg: rgba(30, 30, 30, 0.4);
+            --input-border: rgba(100, 100, 100, 0.3);
+            --button-bg: #00ffff;
+            --button-hover: #00cccc;
+            --section-bg: rgba(20, 20, 20, 0.6);
+            --header-bg: radial-gradient(circle at top, rgba(0, 255, 255, 0.15), rgba(0, 0, 0, 0.9));
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 0;
+            margin: 0;
+            background: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+        
+        body.dark-mode {
+            background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+        }
+        
+        body.dark-mode::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(0, 255, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(0, 100, 255, 0.03) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .header {
+            background: var(--header-bg);
+            padding: 40px 30px;
+            color: white;
+            position: relative;
+            z-index: 1;
+        }
+        
+        body.dark-mode .header {
+            background: radial-gradient(circle at top, rgba(0, 255, 255, 0.15), rgba(0, 0, 0, 0.95));
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 255, 255, 0.1);
+        }
+        
+        .dark-mode-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            z-index: 2;
+        }
+        
+        .dark-mode-toggle:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.05);
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+        
+        .logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            padding: 8px;
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.3));
+        }
+        
+        body.dark-mode .logo {
+            filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.5));
+        }
+        
+        h1 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 700;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode h1 {
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+        
+        .subtitle {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 30px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .section {
+            background: var(--section-bg);
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        
+        body.dark-mode .section {
+            background: rgba(20, 20, 20, 0.4);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 255, 255, 0.1);
+            box-shadow: 
+                0 8px 32px rgba(0, 0, 0, 0.5),
+                0 0 1px rgba(0, 255, 255, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transform: perspective(1000px) rotateX(1deg);
+        }
+        
+        .section-title {
+            margin: 0 0 20px 0;
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        input[type="url"], input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            margin-top: 5px;
+            border: 2px solid var(--input-border);
+            border-radius: 10px;
+            background: var(--input-bg);
+            color: var(--text-color);
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        body.dark-mode input {
+            background: rgba(30, 30, 30, 0.5);
+            border: 2px solid rgba(0, 255, 255, 0.2);
+            color: #ffffff;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: var(--button-bg);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        body.dark-mode input:focus {
+            border-color: #00ffff;
+            box-shadow: 0 0 0 3px rgba(0, 255, 255, 0.2), 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+        
+        button {
+            padding: 12px 24px;
+            margin-top: 20px;
+            background-color: var(--button-bg);
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+        
+        body.dark-mode button {
+            background: #00ffff;
+            color: #000;
+            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.4);
+        }
+        
+        button:hover {
+            background-color: var(--button-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        body.dark-mode button:hover {
+            background: #00cccc;
+            box-shadow: 0 6px 30px rgba(0, 255, 255, 0.6);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        #status {
+            margin-top: 15px;
+            font-weight: 600;
+            padding: 12px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        #status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        #status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .info-text {
+            margin-top: 12px;
+            font-size: 13px;
+            color: var(--text-color);
+            opacity: 0.7;
+        }
+        
+        .info-text a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        body.dark-mode .info-text a {
+            color: #00ffff;
+        }
+        
+        .info-text a:hover {
+            text-decoration: underline;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 30px;
+            margin-top: 40px;
+            border-top: 1px solid var(--input-border);
+            opacity: 0.6;
+            font-size: 13px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        body.dark-mode .footer {
+            border-top: 1px solid rgba(0, 255, 255, 0.2);
+        }
     </style>
 </head>
 <body>
-    <h1>Playwright Tooltip System Settings</h1>
-    <p>Configure your Playwright Tooltip System settings.</p>
-
-    <label for="backendUrl">Backend Service URL (e.g., http://localhost:3000):</label>
-    <input type="url" id="backendUrl" required>
-
-    <label for="openaiKey">OpenAI API Key (Optional - for AI chat features):</label>
-    <input type="password" id="openaiKey" placeholder="sk-proj-..." style="width: 400px; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
-
-    <button id="saveButton">Save Settings</button>
+    <div class="header">
+        <button class="dark-mode-toggle" id="darkModeToggle">Dark Mode</button>
+        <div class="logo-container">
+            <img src="icons/icon48.png" alt="🕷️" class="logo" id="logo">
+            <div>
+                <h1>Tooltip Companion</h1>
+                <p class="subtitle">Configure your AI-powered browsing assistant</p>
+            </div>
+        </div>
+    </div>
     
-    <p style="margin-top: 20px; font-size: 12px; color: #666;">
-        Get your OpenAI API key at: <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a>
-    </p>
-    <div id="status"></div>
+    <div class="container">
+        <div class="section">
+            <h2 class="section-title">Settings</h2>
+
+            <label for="backendUrl">Backend Service URL</label>
+            <input type="url" id="backendUrl" placeholder="http://localhost:3000" required>
+
+            <label for="openaiKey">OpenAI API Key (Optional - for AI chat features)</label>
+            <input type="password" id="openaiKey" placeholder="sk-proj-...">
+            
+            <button id="saveButton">Save Settings</button>
+            <div id="status"></div>
+            
+            <p class="info-text">
+                Get your OpenAI API key at: <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a>
+            </p>
+        </div>
+    </div>
+    
+    <div class="footer">
+        Tooltip Companion v1.2 • tooltipcompanion.com
+    </div>
 
     <script src="options.js"></script>
+    <script>
+        // Dark mode toggle
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const body = document.body;
+        
+        // Check saved preference
+        const savedMode = localStorage.getItem('darkMode');
+        if (savedMode === 'true') {
+            body.classList.add('dark-mode');
+            darkModeToggle.textContent = 'Light Mode';
+        }
+        
+        darkModeToggle.addEventListener('click', () => {
+            body.classList.toggle('dark-mode');
+            const isDark = body.classList.contains('dark-mode');
+            localStorage.setItem('darkMode', isDark);
+            darkModeToggle.textContent = isDark ? 'Light Mode' : 'Dark Mode';
+        });
+    </script>
 </body>
 </html>
