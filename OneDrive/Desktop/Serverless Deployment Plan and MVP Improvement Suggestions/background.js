@@ -3,10 +3,22 @@
 chrome.runtime.onInstalled.addListener(() => {
     console.log('Playwright Tooltip System installed');
     
-    // Create context menu item
+    // Create context menu items
     chrome.contextMenus.create({
         id: 'toggle-tooltips',
         title: 'Enable/Disable Playwright Tooltips',
+        contexts: ['all']
+    });
+    
+    chrome.contextMenus.create({
+        id: 'precrawl-links',
+        title: 'Precrawl Links (Cache Screenshots)',
+        contexts: ['all']
+    });
+    
+    chrome.contextMenus.create({
+        id: 'refresh-cache',
+        title: 'Refresh Cache (Clear & Reload)',
         contexts: ['all']
     });
 });
@@ -33,6 +45,34 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
                             // Ignore errors for tabs that don't have content script
                         });
                     });
+                });
+            });
+        });
+    } 
+    else if (info.menuItemId === 'precrawl-links') {
+        console.log('Precrawling links...');
+        
+        // Send message to current tab to trigger precrawl
+        if (tab.id) {
+            chrome.tabs.sendMessage(tab.id, {
+                action: 'precrawl-links'
+            }).then(() => {
+                console.log('✅ Precrawl triggered');
+            }).catch(() => {
+                console.error('❌ Failed to trigger precrawl - reload the page');
+            });
+        }
+    }
+    else if (info.menuItemId === 'refresh-cache') {
+        console.log('Refreshing cache...');
+        
+        // Clear IndexedDB for all tabs
+        chrome.tabs.query({}, (tabs) => {
+            tabs.forEach(tab => {
+                chrome.tabs.sendMessage(tab.id, {
+                    action: 'refresh-cache'
+                }).catch(() => {
+                    // Ignore errors for tabs that don't have content script
                 });
             });
         });

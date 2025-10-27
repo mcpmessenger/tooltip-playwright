@@ -26,7 +26,7 @@
         initTooltipSystem(BACKEND_SERVICE_URL, TOOLTIPS_ENABLED);
     });
     
-    // Listen for toggle messages from background script
+    // Listen for messages from background script
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'toggle-tooltips') {
             const status = request.enabled ? '✅ ENABLED' : '❌ DISABLED';
@@ -36,8 +36,49 @@
             if (window.tooltipsEnabled !== undefined) {
                 window.tooltipsEnabled = request.enabled;
             }
+            sendResponse({ success: true });
         }
-        sendResponse({ success: true });
+        else if (request.action === 'precrawl-links') {
+            console.log('🕷️ Precrawl triggered from context menu');
+            
+            // Trigger precrawl function if it exists
+            if (typeof window.spiderPrecrawl === 'function') {
+                window.spiderPrecrawl(20).then(result => {
+                    console.log(`✅ Precrawl complete!`, result);
+                    sendResponse({ success: true, result });
+                }).catch(error => {
+                    console.error('❌ Precrawl failed:', error);
+                    sendResponse({ success: false, error: error.message });
+                });
+                return true; // Keep the channel open for async response
+            } else {
+                console.error('spiderPrecrawl function not found');
+                sendResponse({ success: false, error: 'Function not available' });
+            }
+        }
+        else if (request.action === 'refresh-cache') {
+            console.log('🔄 Refreshing cache...');
+            
+            // Clear IndexedDB
+            const deleteReq = indexedDB.deleteDatabase('playwright-tooltips');
+            deleteReq.onsuccess = () => {
+                console.log('✅ IndexedDB cleared');
+                sendResponse({ success: true });
+                
+                // Reload page to reinitialize
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            };
+            deleteReq.onerror = () => {
+                console.warn('Failed to clear IndexedDB');
+                sendResponse({ success: false, error: 'Failed to clear cache' });
+            };
+            return true; // Keep the channel open for async response
+        }
+        else {
+            sendResponse({ success: false, error: 'Unknown action' });
+        }
     });
     
     function initTooltipSystem(BACKEND_SERVICE_URL, tooltipsEnabled = true) {
