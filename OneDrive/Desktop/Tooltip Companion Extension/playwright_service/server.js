@@ -205,7 +205,10 @@ function extractOCRTextAsync(screenshotDataUrl, url) {
             const ocrPath = path.join(__dirname, '..', 'Smart Parser and OCR Integration for API Keys and Annotations', 'ocr_processor.py');
             
             const env = { ...process.env };
-            if (!env.PATH.includes('Tesseract-OCR')) {
+            // Ensure PATH exists before checking
+            if (!env.PATH) {
+                env.PATH = 'C:\\Program Files\\Tesseract-OCR';
+            } else if (typeof env.PATH === 'string' && !env.PATH.includes('Tesseract-OCR')) {
                 env.PATH = 'C:\\Program Files\\Tesseract-OCR;' + env.PATH;
             }
             
@@ -452,8 +455,11 @@ app.post('/chat', async (req, res) => {
                         if (fs.existsSync(ocrPath)) {
                             console.log('🎯 Running OCR script...');
                             // Set PATH to include Tesseract if not already there
-                            const env = process.env;
-                            if (!env.PATH.includes('Tesseract-OCR')) {
+                            const env = { ...process.env };
+                            // Ensure PATH exists before checking
+                            if (!env.PATH) {
+                                env.PATH = 'C:\\Program Files\\Tesseract-OCR';
+                            } else if (typeof env.PATH === 'string' && !env.PATH.includes('Tesseract-OCR')) {
                                 env.PATH = 'C:\\Program Files\\Tesseract-OCR;' + env.PATH;
                             }
                             
