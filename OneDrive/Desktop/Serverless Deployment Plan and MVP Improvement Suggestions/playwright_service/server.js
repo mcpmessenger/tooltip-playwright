@@ -4,18 +4,47 @@
 const express = require('express');
 const { chromium } = require('playwright');
 const cors = require('cors');
+const Tesseract = require('tesseract.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        // Allow chrome extensions
+        if (origin.startsWith('chrome-extension://')) return callback(null, true);
+        
+        // Allow localhost
+        if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:')) return callback(null, true);
+        
+        // Allow all HTTPS origins (for web pages)
+        if (origin.startsWith('https://')) return callback(null, true);
+        
+        // Allow HTTP for local development
+        if (origin.startsWith('http://')) return callback(null, true);
+        
+        callback(null, true);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    optionsSuccessStatus: 200
+}));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
+app.use(express.raw({ limit: '100mb' }));
 
 // State
 let browser = null;
 let screenshotCache = new Map();
+let pageAnalysisCache = new Map(); // Cache for page analysis
+let blockedSites = new Set(); // Track sites that blocked us
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const BLOCKED_TTL = 60 * 60 * 1000; // Don't retry blocked sites for 1 hour
 
 // Initialize browser
 async function initBrowser() {
@@ -44,9 +73,73 @@ function isCacheValid(timestamp) {
     return (Date.now() - timestamp) < CACHE_TTL;
 }
 
+// Extract text from screenshot using OCR
+async function extractTextFromScreenshot(screenshotBuffer) {
+    try {
+        console.log('🔍 Extracting text from screenshot...');
+        const { data: { text } } = await Tesseract.recognize(screenshotBuffer, 'eng', {
+            logger: m => console.log(`OCR: ${m.status} - ${m.progress * 100}%`)
+        });
+        return text.trim();
+    } catch (error) {
+        console.warn('OCR failed:', error.message);
+        return '';
+    }
+}
+
+// Analyze page content and extract key information
+function analyzePageContent(text, url) {
+    const analysis = {
+        pageType: 'unknown',
+        keyTopics: [],
+        suggestedActions: [],
+        confidence: 0
+    };
+    
+    const lowerText = text.toLowerCase();
+    const lowerUrl = url.toLowerCase();
+    
+    // Detect page type
+    if (lowerUrl.includes('login') || lowerText.includes('sign in') || lowerText.includes('password')) {
+        analysis.pageType = 'login';
+        analysis.suggestedActions.push('Login form detected - be careful with credentials');
+    } else if (lowerUrl.includes('checkout') || lowerText.includes('buy now') || lowerText.includes('add to cart')) {
+        analysis.pageType = 'ecommerce';
+        analysis.suggestedActions.push('Shopping page - check prices and reviews');
+    } else if (lowerUrl.includes('bank') || lowerText.includes('account') || lowerText.includes('balance')) {
+        analysis.pageType = 'banking';
+        analysis.suggestedActions.push('Financial page - verify security');
+    } else if (lowerText.includes('news') || lowerText.includes('article')) {
+        analysis.pageType = 'news';
+        analysis.suggestedActions.push('News article - check publication date');
+    } else if (lowerText.includes('contact') || lowerText.includes('phone') || lowerText.includes('email')) {
+        analysis.pageType = 'contact';
+        analysis.suggestedActions.push('Contact information available');
+    }
+    
+    // Extract key topics
+    const topics = [];
+    if (lowerText.includes('price') || lowerText.includes('cost') || lowerText.includes('$')) topics.push('pricing');
+    if (lowerText.includes('review') || lowerText.includes('rating')) topics.push('reviews');
+    if (lowerText.includes('download') || lowerText.includes('install')) topics.push('download');
+    if (lowerText.includes('support') || lowerText.includes('help')) topics.push('support');
+    if (lowerText.includes('privacy') || lowerText.includes('terms')) topics.push('legal');
+    
+    analysis.keyTopics = topics;
+    analysis.confidence = Math.min(0.9, topics.length * 0.2 + (analysis.pageType !== 'unknown' ? 0.3 : 0));
+    
+    return analysis;
+}
+
 // Capture screenshot
 async function captureScreenshot(url) {
     try {
+        // Check if site is blocked
+        const hostname = new URL(url).hostname;
+        if (blockedSites.has(hostname)) {
+            throw new Error(`Site ${hostname} is currently blocked (bot detection). Will retry in 1 hour.`);
+        }
+        
         // Check cache
         const cacheEntry = screenshotCache.get(url);
         if (cacheEntry && isCacheValid(cacheEntry.timestamp)) {
@@ -58,21 +151,38 @@ async function captureScreenshot(url) {
         
         const browserInstance = await initBrowser();
         const context = await browserInstance.newContext({
-            viewport: { width: 1280, height: 720 }
+            viewport: { width: 800, height: 600 }, // Smaller viewport = faster, smaller images
+            deviceScaleFactor: 1, // Reduce quality slightly for speed
+            // Add user agent to avoid bot detection
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            // Add extra HTTP headers
+            extraHTTPHeaders: {
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            }
         });
         
         const page = await context.newPage();
         
-        // Navigate to URL
+        // Navigate to URL with faster loading strategy
         await page.goto(url, { 
-            waitUntil: 'networkidle',
-            timeout: 30000 
+            waitUntil: 'domcontentloaded', // Much faster than networkidle
+            timeout: 10000 // Reduced from 30s to 10s
         });
         
-        // Take screenshot
+        // Wait a bit for content to render (faster than networkidle)
+        await page.waitForTimeout(500); // Wait 500ms for dynamic content
+        
+        // Take screenshot with smaller dimensions
         const screenshot = await page.screenshot({
             fullPage: false,
-            type: 'png'
+            type: 'png',
+            clip: { // Crop to specific area if needed
+                x: 0,
+                y: 0,
+                width: 800,
+                height: 600
+            }
         });
         
         // Close context
@@ -82,19 +192,52 @@ async function captureScreenshot(url) {
         const base64Screenshot = screenshot.toString('base64');
         const dataUrl = `data:image/png;base64,${base64Screenshot}`;
         
-        // Cache the result
-        screenshotCache.set(url, {
+        // Extract text using OCR
+        const extractedText = await extractTextFromScreenshot(screenshot);
+        
+        // Analyze page content
+        const analysis = analyzePageContent(extractedText, url);
+        
+        // Cache the result with analysis
+        const newCacheEntry = {
             screenshot: dataUrl,
-            timestamp: Date.now()
-        });
+            timestamp: Date.now(),
+            text: extractedText,
+            analysis: analysis
+        };
+        
+        screenshotCache.set(url, newCacheEntry);
+        pageAnalysisCache.set(url, analysis);
         
         console.log(`✅ Screenshot captured: ${url}`);
+        console.log(`📊 Page type: ${analysis.pageType} (confidence: ${Math.round(analysis.confidence * 100)}%)`);
+        console.log(`🔍 Key topics: ${analysis.keyTopics.join(', ') || 'none'}`);
+        
         return dataUrl;
         
-    } catch (error) {
-        console.error(`❌ Error capturing screenshot for ${url}:`, error.message);
-        throw error;
-    }
+        } catch (error) {
+            console.error(`❌ Error capturing screenshot for ${url}:`, error.message);
+            
+            // Check if it's a timeout or network error
+            if (error.message.includes('Navigation') || error.message.includes('timeout')) {
+                console.warn(`   ⏱️ Page load timeout - this site may be slow or blocked`);
+            }
+            
+            // Check if it's a 500 or server error - mark as blocked
+            if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
+                const hostname = new URL(url).hostname;
+                blockedSites.add(hostname);
+                console.warn(`   🚫 Server blocked this request - will skip for 1 hour`);
+                
+                // Auto-clear blocked sites after 1 hour
+                setTimeout(() => {
+                    blockedSites.delete(hostname);
+                    console.log(`   ✅ Unblocked ${hostname} after cooldown`);
+                }, BLOCKED_TTL);
+            }
+            
+            throw error;
+        }
 }
 
 // Routes
@@ -148,15 +291,168 @@ app.post('/capture', async (req, res) => {
     }
 });
 
+// Get page analysis endpoint
+app.get('/analyze/:url', async (req, res) => {
+    try {
+        const url = decodeURIComponent(req.params.url);
+        
+        // Check cache first
+        const analysis = pageAnalysisCache.get(url);
+        if (analysis) {
+            return res.json({
+                url: url,
+                analysis: analysis,
+                cached: true
+            });
+        }
+        
+        // If not cached, return not found
+        res.status(404).json({
+            error: 'Analysis not found',
+            message: 'Page analysis not available. Take a screenshot first.'
+        });
+        
+    } catch (error) {
+        console.error('❌ Analysis error:', error.message);
+        res.status(500).json({
+            error: 'Failed to get analysis',
+            message: error.message
+        });
+    }
+});
+
+// Chat endpoint
+app.post('/chat', async (req, res) => {
+    console.log('🚨 CHAT ENDPOINT CALLED!');
+    try {
+        console.log('📨 Chat request received:', {
+            body: req.body,
+            headers: req.headers,
+            method: req.method
+        });
+        
+        const { message, currentUrl, url, openaiKey } = req.body;
+        const actualUrl = currentUrl || url; // Handle both field names
+        
+        console.log('🔍 URL parsing:', { currentUrl, url, actualUrl });
+        
+        if (!message) {
+            console.log('❌ Missing message parameter');
+            return res.status(400).json({
+                error: 'Missing message parameter',
+                message: 'Please provide a message in the request body: { "message": "Hello" }'
+            });
+        }
+        
+        console.log(`💬 Chat message: ${message}`);
+        console.log(`🔑 OpenAI key provided: ${openaiKey ? 'YES' : 'NO'}`);
+        console.log(`🌐 Current URL: ${actualUrl || 'none'}`);
+        
+        // Check if OpenAI key is provided
+        if (!openaiKey || !openaiKey.trim()) {
+            console.log('⚠️ No OpenAI key - returning setup message');
+            return res.json({ 
+                response: 'OpenAI API key not configured! To enable intelligent chat: 1. Click the extension icon → Options 2. Enter your OpenAI API key 3. Click "Save Settings" 4. Try chatting again! Get your key at: https://platform.openai.com/api-keys',
+                timestamp: new Date().toISOString(),
+                context: actualUrl ? pageAnalysisCache.get(actualUrl) : null
+            });
+        }
+        
+        // Get context from current page if available
+        let contextInfo = '';
+        if (actualUrl) {
+            const analysis = pageAnalysisCache.get(actualUrl);
+            if (analysis) {
+                contextInfo = `\n\nCurrent page context:\n- Page type: ${analysis.pageType}\n- Key topics: ${analysis.keyTopics.join(', ') || 'none'}\n- Suggestions: ${analysis.suggestedActions.join('; ') || 'none'}`;
+            }
+        }
+        
+        // Generate a more helpful response
+        let response;
+        const lowerMessage = message.toLowerCase();
+        
+        if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
+            response = `Hello! 👋 I'm your Smart Tooltip Companion. I can analyze web pages using OCR and provide intelligent insights about what you're viewing.${contextInfo}`;
+        } else if (lowerMessage.includes('analyze') || lowerMessage.includes('what is this page')) {
+            if (actualUrl && pageAnalysisCache.has(actualUrl)) {
+                const analysis = pageAnalysisCache.get(actualUrl);
+                response = `📊 Page Analysis for ${actualUrl}:\n• Type: ${analysis.pageType}\n• Confidence: ${Math.round(analysis.confidence * 100)}%\n• Key Topics: ${analysis.keyTopics.join(', ') || 'none'}\n• Suggestions: ${analysis.suggestedActions.join('; ') || 'none'}`;
+            } else {
+                response = `I can analyze pages! Hover over a link to capture a screenshot, then ask me to analyze it.`;
+            }
+        } else if (lowerMessage.includes('tooltip') || lowerMessage.includes('screenshot')) {
+            response = `The smart tooltip system now includes:\n• OCR text extraction from screenshots\n• Intelligent page type detection\n• Proactive suggestions based on content\n• Context-aware chat responses${contextInfo}`;
+        } else if (lowerMessage.includes('help')) {
+            response = `I can help you with:\n• 🔍 Page analysis (OCR + AI insights)\n• 📸 Smart tooltips with context\n• 🧠 Proactive suggestions\n• 💬 Context-aware chat\n\nTry: "analyze this page" or "what type of page is this?"${contextInfo}`;
+        } else {
+            response = `I received your message: "${message}". I'm now equipped with OCR and smart analysis! Ask me to analyze pages or explain what I can see.${contextInfo}`;
+        }
+        
+        res.json({ 
+            response,
+            timestamp: new Date().toISOString(),
+            context: actualUrl ? pageAnalysisCache.get(actualUrl) : null
+        });
+        
+        console.log('✅ Chat response sent:', {
+            response: response.substring(0, 100) + '...',
+            timestamp: new Date().toISOString(),
+            hasContext: !!pageAnalysisCache.get(actualUrl)
+        });
+        
+    } catch (error) {
+        console.error('❌ Chat error:', error.message);
+        res.status(500).json({
+            error: 'Failed to process chat message',
+            message: error.message
+        });
+    }
+});
+
 // Health check
 app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
         browser: browser ? 'initialized' : 'not initialized',
         cache: {
-            size: screenshotCache.size,
-            entries: Array.from(screenshotCache.keys())
+            screenshots: screenshotCache.size,
+            analysis: pageAnalysisCache.size
+        },
+        features: {
+            ocr: true,
+            analysis: true,
+            chat: true
         }
+    });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('❌ Server error:', err.message);
+    
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({
+            error: 'Payload too large',
+            message: 'Request payload exceeds the maximum allowed size. Try reducing image quality.',
+            timestamp: new Date().toISOString()
+        });
+    }
+    
+    res.status(500).json({
+        error: 'Internal server error',
+        message: err.message,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({
+        error: 'Not found',
+        message: `Endpoint ${req.method} ${req.path} not found`,
+        timestamp: new Date().toISOString()
     });
 });
 

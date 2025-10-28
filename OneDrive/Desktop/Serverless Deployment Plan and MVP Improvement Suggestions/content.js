@@ -13,9 +13,15 @@
         const MAX_TOOLTIP_HEIGHT = 300;
     
     // Get backend URL and enabled state from storage
-    chrome.storage.sync.get({ backendUrl: 'http://localhost:3000', tooltipsEnabled: true }, (items) => {
+    chrome.storage.sync.get({ backendUrl: 'http://localhost:3000', tooltipsEnabled: true, openaiKey: '' }, (items) => {
         const BACKEND_SERVICE_URL = items.backendUrl.replace(/\/$/, ''); // Remove trailing slash
         const TOOLTIPS_ENABLED = items.tooltipsEnabled;
+        const OPENAI_KEY = items.openaiKey;
+        
+        console.log('Extension loaded with settings:');
+        console.log('  Backend URL:', BACKEND_SERVICE_URL);
+        console.log('  Tooltips enabled:', TOOLTIPS_ENABLED);
+        console.log('  OpenAI key set:', OPENAI_KEY ? 'YES' : 'NO');
         
         const status = TOOLTIPS_ENABLED ? '✅ ENABLED' : '❌ DISABLED';
         console.log(`${status} Playwright tooltips via Browser Extension!`);
@@ -24,6 +30,9 @@
         
         // Initialize the tooltip system
         initTooltipSystem(BACKEND_SERVICE_URL, TOOLTIPS_ENABLED);
+        
+        // Initialize the chat system
+        initChatSystem(BACKEND_SERVICE_URL, OPENAI_KEY);
     });
     
     // Listen for messages from background script
@@ -81,7 +90,183 @@
         }
     });
     
-    function initTooltipSystem(BACKEND_SERVICE_URL, tooltipsEnabled = true) {
+    // Chat functionality
+    function initChatSystem(BACKEND_SERVICE_URL, OPENAI_KEY) {
+        // Create chat interface if it doesn't exist
+        if (document.getElementById('tooltip-companion-chat')) {
+            return; // Already exists
+        }
+        
+        const chatContainer = document.createElement('div');
+        chatContainer.id = 'tooltip-companion-chat';
+        chatContainer.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 350px;
+            height: 500px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        `;
+        
+        // Chat header
+        const chatHeader = document.createElement('div');
+        chatHeader.style.cssText = `
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        `;
+        chatHeader.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 20px; height: 20px; background: #007bff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px;">🕷️</div>
+                <span style="font-weight: 600; font-size: 14px;">Tooltip Companion</span>
+            </div>
+            <button id="chat-close" style="background: none; border: none; font-size: 18px; cursor: pointer; color: #666;">×</button>
+        `;
+        
+        // Chat messages area
+        const chatMessages = document.createElement('div');
+        chatMessages.id = 'chat-messages';
+        chatMessages.style.cssText = `
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        `;
+        
+        // Chat input area
+        const chatInput = document.createElement('div');
+        chatInput.style.cssText = `
+            padding: 12px 16px;
+            border-top: 1px solid #ddd;
+            display: flex;
+            gap: 8px;
+        `;
+        chatInput.innerHTML = `
+            <input type="text" id="chat-input" placeholder="Type a message..." style="flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 20px; outline: none; font-size: 14px;">
+            <button id="chat-send" style="background: #007bff; color: white; border: none; border-radius: 50%; width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center;">✈</button>
+        `;
+        
+        chatContainer.appendChild(chatHeader);
+        chatContainer.appendChild(chatMessages);
+        chatContainer.appendChild(chatInput);
+        document.body.appendChild(chatContainer);
+        
+        // Add welcome message based on API key status
+        if (OPENAI_KEY && OPENAI_KEY.trim()) {
+            addChatMessage('🎉 UPDATED! Your extension has been reloaded successfully! Ready to chat? ✨', 'bot');
+        } else {
+            addChatMessage('OpenAI API key not configured! To enable chat: 1. Click the extension icon → Options 2. Enter your OpenAI API key 3. Click "Save Settings" 4. Try chatting again! Get your key at: https://platform.openai.com/api-keys', 'bot');
+        }
+        
+        // Event listeners
+        document.getElementById('chat-close').addEventListener('click', () => {
+            chatContainer.style.display = 'none';
+        });
+        
+        document.getElementById('chat-send').addEventListener('click', sendChatMessage);
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+        
+        function addChatMessage(message, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.style.cssText = `
+                padding: 8px 12px;
+                border-radius: 12px;
+                max-width: 80%;
+                font-size: 14px;
+                line-height: 1.4;
+                ${sender === 'user' ? 
+                    'background: #007bff; color: white; margin-left: auto;' : 
+                    'background: #f1f3f4; color: #333; margin-right: auto;'
+                }
+            `;
+            messageDiv.textContent = message;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Check if API key is configured
+            if (!OPENAI_KEY || !OPENAI_KEY.trim()) {
+                addChatMessage('OpenAI API key not configured! To enable chat: 1. Click the extension icon → Options 2. Enter your OpenAI API key 3. Click "Save Settings" 4. Try chatting again! Get your key at: https://platform.openai.com/api-keys', 'bot');
+                return;
+            }
+            
+            // Add user message
+            addChatMessage(message, 'user');
+            input.value = '';
+            
+            try {
+                console.log('Sending chat request to:', `${BACKEND_SERVICE_URL}/chat`);
+                console.log('Request payload:', { message, currentUrl: window.location.href, openaiKey: OPENAI_KEY ? '***' : 'NOT_SET' });
+                
+                const response = await fetch(`${BACKEND_SERVICE_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        message: message,
+                        currentUrl: window.location.href,
+                        openaiKey: OPENAI_KEY
+                    })
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Response error text:', errorText);
+                    throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+                }
+                
+                const responseText = await response.text();
+                console.log('Raw response text:', responseText);
+                
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                    console.log('Parsed response:', data);
+                } catch (parseError) {
+                    console.error('JSON parse error:', parseError);
+                    console.error('Raw response that failed to parse:', responseText);
+                    throw new Error('Invalid JSON response from backend');
+                }
+                
+                console.log('Chat response received:', data);
+                
+                if (data.response) {
+                    addChatMessage(data.response, 'bot');
+                } else {
+                    addChatMessage('I received your message but couldn\'t generate a proper response.', 'bot');
+                }
+                
+            } catch (error) {
+                console.error('Chat error:', error);
+                addChatMessage(`Error: ${error.message}. Check if backend is running on localhost:3000`, 'bot');
+            }
+        }
+    }
         // State management
         window.tooltipsEnabled = tooltipsEnabled;
         const cache = new Map();
@@ -164,12 +349,40 @@
             
             // Update tooltip content with error handling
             if (screenshotUrl) {
-                tooltipDiv.innerHTML = `<img src="${screenshotUrl}" 
-                    style="display: block; width: 100%; height: auto; max-height: ${MAX_TOOLTIP_HEIGHT}px; object-fit: cover;" 
-                    alt="Link preview" 
-                    onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;padding: 20px; text-align: center; color: #d32f2f;&quot;>⚠️ Failed to load preview</div>'">`;
+                // Try to get analysis for this URL
+                fetch(`${BACKEND_SERVICE_URL}/analyze/${encodeURIComponent(url)}`)
+                    .then(response => response.ok ? response.json() : null)
+                    .then(data => {
+                        if (data && data.analysis) {
+                            const analysis = data.analysis;
+                            tooltipDiv.innerHTML = `
+                                <div style="position: relative;">
+                                    <img src="${screenshotUrl}" 
+                                        style="display: block; width: 100%; height: auto; max-height: ${MAX_TOOLTIP_HEIGHT - 60}px; object-fit: cover;" 
+                                        alt="Link preview" 
+                                        onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;padding: 20px; text-align: center; color: #d32f2f;&quot;>⚠️ Failed to load preview</div>'">
+                                    <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 8px; font-size: 11px;">
+                                        <div style="font-weight: bold; margin-bottom: 4px;">🧠 ${analysis.pageType.toUpperCase()}</div>
+                                        ${analysis.keyTopics.length > 0 ? `<div>📋 ${analysis.keyTopics.join(', ')}</div>` : ''}
+                                        ${analysis.suggestedActions.length > 0 ? `<div style="margin-top: 4px; font-style: italic;">💡 ${analysis.suggestedActions[0]}</div>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            tooltipDiv.innerHTML = `<img src="${screenshotUrl}" 
+                                style="display: block; width: 100%; height: auto; max-height: ${MAX_TOOLTIP_HEIGHT}px; object-fit: cover;" 
+                                alt="Link preview" 
+                                onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;padding: 20px; text-align: center; color: #d32f2f;&quot;>⚠️ Failed to load preview</div>'">`;
+                        }
+                    })
+                    .catch(() => {
+                        tooltipDiv.innerHTML = `<img src="${screenshotUrl}" 
+                            style="display: block; width: 100%; height: auto; max-height: ${MAX_TOOLTIP_HEIGHT}px; object-fit: cover;" 
+                            alt="Link preview" 
+                            onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;padding: 20px; text-align: center; color: #d32f2f;&quot;>⚠️ Failed to load preview</div>'">`;
+                    });
             } else {
-                tooltipDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #666;">Loading preview...</div>`;
+                tooltipDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #666;">🔍 Analyzing page...</div>`;
             }
             
             // Position tooltip
@@ -238,15 +451,27 @@
             return cacheEntry && (Date.now() - cacheEntry.timestamp) < CACHE_TTL;
         }
         
-        // Fetch screenshot from backend
+        // Fetch screenshot from backend with timeout and retry
         async function fetchScreenshot(url) {
-            try {
-                console.log(`📸 Fetching screenshot for: ${url}`);
-            const response = await fetch(`${BACKEND_SERVICE_URL}/capture`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
-            });
+            const MAX_RETRIES = 2;
+            const TIMEOUT_MS = 8000; // 8 second timeout
+            
+            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    console.log(`📸 Fetching screenshot for: ${url} (attempt ${attempt + 1}/${MAX_RETRIES + 1})`);
+                    
+                    // Create abort controller for timeout
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+                    
+                    const response = await fetch(`${BACKEND_SERVICE_URL}/capture`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url }),
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -304,11 +529,22 @@
                 // Also save to IndexedDB for persistence (save base64 data, not blob URL)
                 await saveToIndexedDB(url, base64Data);
                 
-                console.log(`✅ Screenshot cached successfully`);
-                return blobUrl;
-        } catch (error) {
-                console.error(`Failed to fetch screenshot for ${url}:`, error);
-                throw error;
+                    console.log(`✅ Screenshot cached successfully`);
+                    return blobUrl;
+                    
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    console.error(`Attempt ${attempt + 1} failed:`, error.message);
+                    
+                    // If this was the last attempt, throw the error
+                    if (attempt === MAX_RETRIES) {
+                        console.error(`❌ All ${MAX_RETRIES + 1} attempts failed for ${url}`);
+                        throw error;
+                    }
+                    
+                    // Wait a bit before retrying (exponential backoff)
+                    await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+                }
             }
         }
         
@@ -607,40 +843,49 @@
             // Check for links
             if (element.tagName === 'A' && element.href) return true;
             
-            // Check for buttons
-            if (element.tagName === 'BUTTON' || element.getAttribute('role') === 'button') return true;
+            // Check for buttons - only if they have navigation URLs
+            if (element.tagName === 'BUTTON' || element.getAttribute('role') === 'button') {
+                const url = getElementUrl(element);
+                if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                    return true;
+                }
+                // Skip buttons without navigation URLs to avoid false positives
+                return false;
+            }
             
-            // Check for elements with onclick handlers
-            if (element.onclick || element.getAttribute('onclick')) return true;
+            // Check for onclick handlers that contain URL navigation
+            const onclick = element.onclick || element.getAttribute('onclick');
+            if (onclick) {
+                const onclickStr = onclick.toString();
+                if (onclickStr.match(/["'](https?:\/\/[^"']+)["']/)) return true;
+            }
             
-            // Check for elements with data-clickable or role attributes
-            if (element.dataset.clickable || element.getAttribute('role') === 'link') return true;
+            // Check for elements with role="link" AND valid URL
+            if (element.getAttribute('role') === 'link') {
+                const url = getElementUrl(element);
+                if (url && (url.startsWith('http://') || url.startsWith('https://'))) return true;
+            }
             
             // Check for anchor tags (even without href)
             if (element.tagName === 'A') return true;
             
-            // Check for clickable divs/spans with specific attributes
-            if (element.dataset.href || element.dataset.url || element.dataset.to || element.dataset.path) return true;
+            // Check for clickable divs/spans with navigation URLs
+            if (element.dataset.href || element.dataset.url || element.dataset.to || element.dataset.path || element.dataset.link) {
+                const url = getElementUrl(element);
+                if (url && (url.startsWith('http://') || url.startsWith('https://')) && !url.startsWith('javascript:')) {
+                    return true;
+                }
+            }
             
-            // Check for common clickable patterns (LinkedIn, Twitter, etc.)
-            const clickableClasses = ['clickable', 'button', 'link', 'nav-item', 'action', 'btn', 'card', 'tile', 'item'];
-            const classList = (element.className || '').toLowerCase();
-            const id = (element.id || '').toLowerCase();
-            
-            // Check if class name contains clickable indicators
-            if (clickableClasses.some(cls => classList.includes(cls))) return true;
             
             // Check if element is inside a link
             const parentLink = element.closest('a[href]');
             if (parentLink && parentLink.href) return true;
             
-            // Check cursor style (might indicate clickability)
-            if (style.cursor === 'pointer') return true;
-            
-            // Check for common framework attributes
+            // Check for common framework test attributes with valid URLs
             if (element.dataset.testid || element.dataset.cy || element.dataset.testId) {
                 const url = getElementUrl(element);
-                if (url) return true;
+                if (url && (url.startsWith('http://') || url.startsWith('https://'))) return true;
             }
             
             return false;
