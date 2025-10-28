@@ -49,6 +49,11 @@ class RequestQueue {
 }
 
 const app = express();
+
+// Increase body size limit for image uploads (base64 images can be large)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
 const PORT = process.env.PORT || 3000;
 
 // Initialize OpenAI client (optional)
