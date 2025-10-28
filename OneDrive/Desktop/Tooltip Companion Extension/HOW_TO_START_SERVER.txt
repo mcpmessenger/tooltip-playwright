@@ -1,0 +1,24 @@
+═══════════════════════════════════════════════════════════
+   START THE BACKEND SERVER - COPY & PASTE THIS COMMAND
+═══════════════════════════════════════════════════════════
+
+Open a NEW PowerShell terminal and run:
+
+cd "C:\Users\senti\OneDrive\Desktop\Tooltip Companion Extension\playwright_service"
+node server.js
+
+═══════════════════════════════════════════════════════════
+
+IMPORTANT:
+1. Open a NEW terminal window
+2. Copy and paste the commands above
+3. Keep the terminal window OPEN
+4. You'll see: "Server listening on http://localhost:3000"
+5. Then reload your extension and test!
+
+═══════════════════════════════════════════════════════════
+
+Or just double-click: START_BACKEND.bat
+
+═══════════════════════════════════════════════════════════
+
