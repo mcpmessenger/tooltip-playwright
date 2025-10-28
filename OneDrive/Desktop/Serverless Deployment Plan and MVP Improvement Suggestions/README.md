@@ -257,17 +257,17 @@ Returns:
 }
 ```
 
-## 🚨 Critical Issue: Chat Functionality Bug Bounty
+## ✅ Chat Functionality Bug Bounty - RESOLVED
 
-**⚠️ URGENT:** Chat functionality is currently broken with "Backend service unavailable" error despite backend working correctly.
+**🎉 FIXED:** Chat functionality has been restored after identifying root cause.
 
-**🎯 Bug Bounty:** $500 USD for successful diagnosis and fix
-- **Diagnosis Only:** $200 USD  
-- **Complete Fix:** $500 USD
+**💰 Bug Bounty:** $500 USD - **CLAIMED**
+- **Root Cause:** Typo in background.js message passing (`data.reply` vs `data.response`)
+- **Solution:** Fixed message passing and added complete chat handling to background script
 
-**📋 Details:** See [BUG_BOUNTY.md](BUG_BOUNTY.md) for comprehensive analysis and investigation guidelines.
+**📋 Details:** See [BUG_BOUNTY.md](BUG_BOUNTY.md) for complete analysis and solution.
 
-**🔍 Problem:** Extension receives empty objects `{}` instead of proper JSON responses, suggesting extension is running cached/compiled code that differs from source files.
+**🔧 Fix Applied:** Extension now properly receives chat responses instead of empty objects.
 
 ## 🐛 Troubleshooting
 
