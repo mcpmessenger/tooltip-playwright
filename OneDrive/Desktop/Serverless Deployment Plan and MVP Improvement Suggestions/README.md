@@ -257,35 +257,46 @@ Returns:
 }
 ```
 
+## 🚨 Critical Issue: Chat Functionality Bug Bounty
+
+**⚠️ URGENT:** Chat functionality is currently broken with "Backend service unavailable" error despite backend working correctly.
+
+**🎯 Bug Bounty:** $500 USD for successful diagnosis and fix
+- **Diagnosis Only:** $200 USD  
+- **Complete Fix:** $500 USD
+
+**📋 Details:** See [BUG_BOUNTY.md](BUG_BOUNTY.md) for comprehensive analysis and investigation guidelines.
+
+**🔍 Problem:** Extension receives empty objects `{}` instead of proper JSON responses, suggesting extension is running cached/compiled code that differs from source files.
+
 ## 🐛 Troubleshooting
 
-### Tooltips Not Showing
+**Having issues?** Check our comprehensive [Troubleshooting Guide](TROUBLESHOOTING.md) for detailed solutions.
 
-1. **Check Backend Status**
-   ```bash
-   curl http://localhost:3000/health
-   ```
+### Quick Fixes
 
-2. **Check Extension Console**
-   - Open DevTools (F12) → Console
-   - Look for: `✅ ENABLED Playwright tooltips`
-   - Check for errors
-
-3. **Verify Settings**
-   - Right-click extension icon → Options
-   - Ensure backend URL is correct
-
-### Backend Not Responding
-
+**Backend not starting:**
 ```bash
-# Check if service is running
+# Make sure you're in the correct directory
 cd playwright_service
+npm install
 npm start
-
-# Should see:
-# 🚀 Playwright Tooltip Backend Service
-# 📡 Server running on http://localhost:3000
 ```
+
+**Extension not working:**
+- **Complete extension reload** (remove and reinstall)
+- Refresh the page (F5)
+- Check browser console for errors
+
+**Chat not working:**
+- Set OpenAI API key in extension options
+- Verify backend is running on localhost:3000
+- Check console for "API Key from storage: Set"
+
+**Screenshots not loading:**
+- Verify backend is running on localhost:3000
+- Check network tab for failed requests
+- Ensure CORS is properly configured
 
 ### Tooltips Flickering
 
