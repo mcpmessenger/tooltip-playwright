@@ -98,3 +98,50 @@ chrome.action.onClicked.addListener(() => {
     chrome.runtime.openOptionsPage();
 });
 
+// Handle messages from content script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('Background received message:', request.action);
+    
+    if (request.action === 'chat') {
+        console.log('Forwarding chat message to backend...');
+        console.log('Message:', request.message);
+        console.log('URL:', request.url);
+        console.log('API Key present:', request.openaiKey ? 'Yes' : 'No');
+        
+        // Get backend URL from storage
+        chrome.storage.sync.get({ backendUrl: 'http://localhost:3000' }, (items) => {
+            const backendUrl = items.backendUrl.replace(/\/$/, '');
+            
+            // Forward chat request to backend
+            fetch(`${backendUrl}/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: request.message,
+                    currentUrl: request.url,
+                    openaiKey: request.openaiKey
+                })
+            })
+            .then(response => {
+                console.log('Fetch response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('✅ Chat response received from backend:', data);
+                console.log('Sending response back to content script...');
+                // ✅ FIX: Use data.response instead of data.reply
+                sendResponse({ reply: data.response });
+            })
+            .catch(error => {
+                console.error('❌ Chat fetch error:', error);
+                sendResponse({ reply: `Error: ${error.message}. Check if backend is running on localhost:3000` });
+            });
+        });
+        
+        // Return true to indicate we will send a response asynchronously
+        return true;
+    }
+});
+

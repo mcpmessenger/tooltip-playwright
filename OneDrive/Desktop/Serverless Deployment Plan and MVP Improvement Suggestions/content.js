@@ -218,48 +218,26 @@
             input.value = '';
             
             try {
-                console.log('Sending chat request to:', `${BACKEND_SERVICE_URL}/chat`);
-                console.log('Request payload:', { message, currentUrl: window.location.href, openaiKey: OPENAI_KEY ? '***' : 'NOT_SET' });
+                console.log('Sending chat message via background script...');
+                console.log('Message:', message);
+                console.log('URL:', window.location.href);
+                console.log('API Key present:', OPENAI_KEY ? 'Yes' : 'No');
                 
-                const response = await fetch(`${BACKEND_SERVICE_URL}/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        message: message,
-                        currentUrl: window.location.href,
-                        openaiKey: OPENAI_KEY
-                    })
+                // Send message to background script instead of direct fetch
+                chrome.runtime.sendMessage({
+                    action: 'chat',
+                    message: message,
+                    url: window.location.href,
+                    openaiKey: OPENAI_KEY
+                }, (response) => {
+                    console.log('Response from background script:', response);
+                    
+                    if (response && response.reply) {
+                        addChatMessage(response.reply, 'bot');
+                    } else {
+                        addChatMessage('I received your message but couldn\'t generate a proper response.', 'bot');
+                    }
                 });
-                
-                console.log('Response status:', response.status);
-                console.log('Response headers:', response.headers);
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Response error text:', errorText);
-                    throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
-                }
-                
-                const responseText = await response.text();
-                console.log('Raw response text:', responseText);
-                
-                let data;
-                try {
-                    data = JSON.parse(responseText);
-                    console.log('Parsed response:', data);
-                } catch (parseError) {
-                    console.error('JSON parse error:', parseError);
-                    console.error('Raw response that failed to parse:', responseText);
-                    throw new Error('Invalid JSON response from backend');
-                }
-                
-                console.log('Chat response received:', data);
-                
-                if (data.response) {
-                    addChatMessage(data.response, 'bot');
-                } else {
-                    addChatMessage('I received your message but couldn\'t generate a proper response.', 'bot');
-                }
                 
             } catch (error) {
                 console.error('Chat error:', error);
